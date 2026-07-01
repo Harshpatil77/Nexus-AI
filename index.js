@@ -257,9 +257,17 @@ async function scrapeWithRetry(url, apiKey, retries = 3, delayMs = 2000) {
 
 // Nemotron extraction helper
 async function extractSchema(markdown, userPrompt, apiKey, format = 'json') {
-  let prompt = `From this content, extract the following information and return ONLY a clean JSON object: ${userPrompt}\nContent: ${markdown}`;
+  const strictRule = `STRICT RULES:
+- Extract ONLY what the user asked for. Do NOT add extra sections, categories, or information beyond the request.
+- If the user asks for specific fields, return ONLY those fields.
+- Do NOT add summaries, notes, eligibility info, submission requirements, or any other unrequested data.
+- Answer the user's question precisely and concisely.`;
+
+  let prompt;
   if (format === 'text') {
-    prompt = `From this content, extract the following information and return it as clean, readable plain text with clear labels:\n${userPrompt}\nContent: ${markdown}`;
+    prompt = `${strictRule}\n\nUser request: ${userPrompt}\n\nReturn ONLY clean, readable plain text answering the user's exact request. Nothing more.\n\nContent:\n${markdown}`;
+  } else {
+    prompt = `${strictRule}\n\nUser request: ${userPrompt}\n\nReturn ONLY a clean JSON object answering the user's exact request. Nothing more.\n\nContent:\n${markdown}`;
   }
 
   const nvidiaUrl = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
