@@ -216,6 +216,9 @@ async function extractSchema(markdown, userPrompt, apiKey) {
   
   // Clean JSON formatting from Nemotron
   let cleaned = text;
+  if (cleaned.startsWith('</think>')) {
+    cleaned = cleaned.replace(/^<\/think>\s*/, '').trim();
+  }
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```json\s*/, '').replace(/```$/, '').trim();
   }
