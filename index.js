@@ -252,12 +252,18 @@ app.post('/scrape', async (req, res) => {
   // Create tasks for each URL
   const tasks = urls.map((url) => async () => {
     try {
+      console.log('1. Starting Firecrawl:', Date.now());
       // 1. Scraping with retry
       const markdown = await scrapeWithRetry(url, firecrawlKey);
+      console.log('2. Firecrawl done:', Date.now());
+
       // 2. Extract schema using Nemotron
       const data = await extractSchema(markdown, prompt, nemotronKey);
+      console.log('3. Claude done:', Date.now());
+
       return { url, data, success: true };
     } catch (error) {
+      console.log('Task execution failed:', error.message);
       return { url, reason: error.message || String(error), success: false };
     }
   });
@@ -295,6 +301,7 @@ app.post('/scrape', async (req, res) => {
   try {
     const filePath = path.join(process.cwd(), `${stateId}.json`);
     await fs.writeFile(filePath, JSON.stringify(output, null, 2), 'utf-8');
+    console.log('4. File saved:', Date.now());
   } catch (err) {
     console.error(`Failed to save state file for ${stateId}:`, err);
   }
