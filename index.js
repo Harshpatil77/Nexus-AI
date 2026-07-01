@@ -11,21 +11,83 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Root landing page
+// Root landing page with test form
 app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
 <html>
-<head><title>Nexus AI</title></head>
+<head>
+<title>Nexus AI</title>
+<style>
+body { font-family: monospace; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+h1 { margin-bottom: 4px; }
+p.sub { color: #666; margin-top: 0; }
+label { display: block; font-weight: bold; margin-top: 16px; }
+textarea { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 14px; padding: 8px; margin-top: 4px; }
+button { margin-top: 16px; padding: 10px 24px; font-size: 16px; font-family: monospace; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+#status { margin-top: 12px; font-weight: bold; }
+#output { margin-top: 12px; background: #f4f4f4; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; display: none; }
+</style>
+</head>
 <body>
 <h1>Nexus AI</h1>
-<p>The execution layer for autonomous AI agents.</p>
-<h3>Endpoints:</h3>
-<ul>
-<li>POST /scrape — scrape URLs and extract structured JSON</li>
-<li>GET /scrape/:state_id — retrieve previous run results</li>
-<li>GET /health — server status</li>
-</ul>
-<p>Contact: [your email]</p>
+<p class="sub">The execution layer for autonomous AI agents.</p>
+<hr>
+<form id="scrapeForm">
+  <label for="urls">URLs (one per line):</label>
+  <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
+
+  <label for="schema">Schema (JSON):</label>
+  <textarea id="schema" rows="6" placeholder='{&#10;  "name": "",&#10;  "email": "",&#10;  "phone": ""&#10;}'></textarea>
+
+  <button type="submit" id="submitBtn">Run Scrape</button>
+</form>
+<div id="status"></div>
+<pre id="output"></pre>
+
+<hr>
+<p><b>Endpoints:</b> POST /scrape &middot; GET /scrape/:state_id &middot; GET /health</p>
+
+<script>
+document.getElementById('scrapeForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const status = document.getElementById('status');
+  const output = document.getElementById('output');
+
+  const urlsRaw = document.getElementById('urls').value.trim();
+  const schemaRaw = document.getElementById('schema').value.trim();
+
+  if (!urlsRaw) { status.textContent = 'Error: Enter at least one URL.'; return; }
+  if (!schemaRaw) { status.textContent = 'Error: Enter a JSON schema.'; return; }
+
+  const urls = urlsRaw.split('\\n').map(u => u.trim()).filter(u => u.length > 0);
+
+  let schema;
+  try { schema = JSON.parse(schemaRaw); }
+  catch(err) { status.textContent = 'Error: Invalid JSON in schema — ' + err.message; return; }
+
+  btn.disabled = true;
+  status.textContent = 'Scraping ' + urls.length + ' URL(s)... please wait.';
+  output.style.display = 'none';
+
+  try {
+    const res = await fetch('/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, schema })
+    });
+    const data = await res.json();
+    output.textContent = JSON.stringify(data, null, 2);
+    output.style.display = 'block';
+    status.textContent = 'Done — ' + data.succeeded + '/' + data.total + ' succeeded. State ID: ' + data.state_id;
+  } catch(err) {
+    status.textContent = 'Request failed: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
 </body>
 </html>`);
 });
