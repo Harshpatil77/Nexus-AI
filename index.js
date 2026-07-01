@@ -11,6 +11,25 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+// Root landing page
+app.get('/', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html>
+<head><title>Nexus AI</title></head>
+<body>
+<h1>Nexus AI</h1>
+<p>The execution layer for autonomous AI agents.</p>
+<h3>Endpoints:</h3>
+<ul>
+<li>POST /scrape — scrape URLs and extract structured JSON</li>
+<li>GET /scrape/:state_id — retrieve previous run results</li>
+<li>GET /health — server status</li>
+</ul>
+<p>Contact: [your email]</p>
+</body>
+</html>`);
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
