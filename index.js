@@ -168,7 +168,7 @@ async function extractSchema(markdown, schema, apiKey) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'nvidia/llama-3.1-nemotron-70b-instruct',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
       messages: [
         {
           role: 'user',
