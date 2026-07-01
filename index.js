@@ -37,8 +37,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <label for="urls">URLs (one per line):</label>
   <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
 
-  <label for="schema">Schema (JSON):</label>
-  <textarea id="schema" rows="6" placeholder='{&#10;  "name": "",&#10;  "email": "",&#10;  "phone": ""&#10;}'></textarea>
+  <label for="prompt">What do you want to extract?</label>
+  <textarea id="prompt" rows="4" placeholder="Extract the company name, email, and pricing from each page"></textarea>
 
   <button type="submit" id="submitBtn">Run Scrape</button>
 </form>
@@ -56,16 +56,12 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   const output = document.getElementById('output');
 
   const urlsRaw = document.getElementById('urls').value.trim();
-  const schemaRaw = document.getElementById('schema').value.trim();
+  const promptRaw = document.getElementById('prompt').value.trim();
 
   if (!urlsRaw) { status.textContent = 'Error: Enter at least one URL.'; return; }
-  if (!schemaRaw) { status.textContent = 'Error: Enter a JSON schema.'; return; }
+  if (!promptRaw) { status.textContent = 'Error: Enter an extraction prompt.'; return; }
 
   const urls = urlsRaw.split('\\n').map(u => u.trim()).filter(u => u.length > 0);
-
-  let schema;
-  try { schema = JSON.parse(schemaRaw); }
-  catch(err) { status.textContent = 'Error: Invalid JSON in schema — ' + err.message; return; }
 
   btn.disabled = true;
   status.textContent = 'Scraping ' + urls.length + ' URL(s)... please wait.';
@@ -75,7 +71,7 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
     const res = await fetch('/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls, schema })
+      body: JSON.stringify({ urls, prompt: promptRaw })
     });
     const data = await res.json();
     output.textContent = JSON.stringify(data, null, 2);
@@ -157,8 +153,8 @@ async function scrapeWithRetry(url, apiKey, retries = 3, delayMs = 2000) {
 }
 
 // Nemotron extraction helper
-async function extractSchema(markdown, schema, apiKey) {
-  const prompt = `Extract the following fields from this content and return ONLY a JSON object with these exact keys: ${JSON.stringify(schema)}. Content: ${markdown}`;
+async function extractSchema(markdown, userPrompt, apiKey) {
+  const prompt = `From this content, extract the following information and return ONLY a clean JSON object: ${userPrompt}\nContent: ${markdown}`;
 
   const nvidiaUrl = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
   const response = await fetch(nvidiaUrl, {
@@ -206,7 +202,7 @@ async function extractSchema(markdown, schema, apiKey) {
 
 // POST /scrape endpoint
 app.post('/scrape', async (req, res) => {
-  const { urls, schema } = req.body;
+  const { urls, prompt } = req.body;
 
   // Validation
   if (!urls || !Array.isArray(urls)) {
@@ -217,8 +213,8 @@ app.post('/scrape', async (req, res) => {
     return res.status(400).json({ error: 'urls array must contain between 1 and 100 items' });
   }
 
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
-    return res.status(400).json({ error: 'schema must be a valid non-array object' });
+  if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
   }
 
   const firecrawlKey = process.env.FIRECRAWL_API_KEY;
@@ -236,7 +232,7 @@ app.post('/scrape', async (req, res) => {
       // 1. Scraping with retry
       const markdown = await scrapeWithRetry(url, firecrawlKey);
       // 2. Extract schema using Nemotron
-      const data = await extractSchema(markdown, schema, nemotronKey);
+      const data = await extractSchema(markdown, prompt, nemotronKey);
       return { url, data, success: true };
     } catch (error) {
       return { url, reason: error.message || String(error), success: false };

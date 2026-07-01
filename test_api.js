@@ -113,7 +113,7 @@ async function runTests() {
     const valRes1 = await fetch('http://localhost:3000/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: { title: '' } })
+      body: JSON.stringify({ prompt: 'Extract title' })
     });
     if (valRes1.status !== 400) throw new Error(`Expected 400, got ${valRes1.status} for missing urls`);
 
@@ -121,17 +121,17 @@ async function runTests() {
     const valRes2 = await fetch('http://localhost:3000/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls: [], schema: { title: '' } })
+      body: JSON.stringify({ urls: [], prompt: 'Extract title' })
     });
     if (valRes2.status !== 400) throw new Error(`Expected 400, got ${valRes2.status} for empty urls`);
 
-    // Test case 2c: Missing schema
+    // Test case 2c: Missing prompt
     const valRes3 = await fetch('http://localhost:3000/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls: ['https://example.com'] })
     });
-    if (valRes3.status !== 400) throw new Error(`Expected 400, got ${valRes3.status} for missing schema`);
+    if (valRes3.status !== 400) throw new Error(`Expected 400, got ${valRes3.status} for missing prompt`);
 
     console.log('✅ Step 2 Passed: API correctly rejects invalid inputs with 400 Bad Request');
 
@@ -147,7 +147,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         urls: ['https://example.com', 'https://example2.com'],
-        schema: { title: '', description: '' }
+        prompt: 'Extract title and description'
       })
     });
 
@@ -187,7 +187,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         urls: ['https://fail.com', 'https://success-after-fail.com'],
-        schema: { title: '' }
+        prompt: 'Extract title'
       })
     });
 
