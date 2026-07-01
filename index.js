@@ -30,6 +30,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 #urlList { margin-top: 16px; border-left: 3px solid #ccc; padding-left: 12px; font-size: 14px; }
 .url-item { margin: 6px 0; }
 #output { margin-top: 16px; background: #f4f4f4; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; display: none; }
+#outputText { margin-top: 16px; background: #ffffff; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; font-family: inherit; display: none; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -43,12 +44,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <label for="prompt">What do you want to extract?</label>
   <textarea id="prompt" rows="4" placeholder="Extract the company name, email, and pricing from each page"></textarea>
 
+  <label>Output Format:</label>
+  <div style="margin-top: 6px; display: flex; gap: 20px; align-items: center;">
+    <label style="display: inline; font-weight: normal; margin-top: 0; cursor: pointer;">
+      <input type="radio" name="format" value="json" style="cursor: pointer;"> JSON
+    </label>
+    <label style="display: inline; font-weight: normal; margin-top: 0; cursor: pointer;">
+      <input type="radio" name="format" value="text" checked style="cursor: pointer;"> Plain Text
+    </label>
+  </div>
+
   <button type="submit" id="submitBtn">Run Scrape</button>
 </form>
 <div id="status"></div>
 <div id="progressContainer"><div id="progressBar"></div></div>
 <div id="urlList"></div>
 <pre id="output"></pre>
+<pre id="outputText"></pre>
 
 <hr>
 <p><b>Endpoints:</b> POST /scrape &middot; POST /scrape-stream &middot; GET /scrape/:state_id &middot; GET /health</p>
@@ -62,9 +74,11 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   const progressBar = document.getElementById('progressBar');
   const urlList = document.getElementById('urlList');
   const output = document.getElementById('output');
+  const outputText = document.getElementById('outputText');
 
   const urlsRaw = document.getElementById('urls').value.trim();
   const promptRaw = document.getElementById('prompt').value.trim();
+  const format = document.querySelector('input[name="format"]:checked').value;
 
   if (!urlsRaw) { status.textContent = 'Error: Enter at least one URL.'; return; }
   if (!promptRaw) { status.textContent = 'Error: Enter an extraction prompt.'; return; }
@@ -73,6 +87,7 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
 
   btn.disabled = true;
   output.style.display = 'none';
+  outputText.style.display = 'none';
   urlList.innerHTML = '';
   urls.forEach((url, i) => {
     urlList.innerHTML += '<div class="url-item" id="url-' + i + '">' + url + ' ⏳</div>';
@@ -86,7 +101,7 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
     const res = await fetch('/scrape-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls, prompt: promptRaw })
+      body: JSON.stringify({ urls, prompt: promptRaw, format })
     });
 
     if (!res.ok) {
@@ -136,11 +151,27 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
               progressBar.style.width = '100%';
               status.textContent = 'Done — ' + eventData.succeeded + ' succeeded, ' + eventData.failed_count + ' failed. State ID: ' + eventData.state_id;
 
-              // Retrieve final JSON state
+              // Retrieve final state data
               const resultsRes = await fetch('/scrape/' + eventData.state_id);
               const resultsData = await resultsRes.json();
-              output.textContent = JSON.stringify(resultsData, null, 2);
-              output.style.display = 'block';
+
+              if (resultsData.format === 'text') {
+                let formattedText = '';
+                resultsData.results.forEach((r, idx) => {
+                  formattedText += '=== URL: ' + r.url + ' ===\\n\\n' + r.data + '\\n\\n';
+                });
+                if (resultsData.failed.length > 0) {
+                  formattedText += '=== Failed URLs ===\\n';
+                  resultsData.failed.forEach(f => {
+                    formattedText += '- ' + f.url + ' (Reason: ' + f.reason + ')\\n';
+                  });
+                }
+                outputText.textContent = formattedText.trim();
+                outputText.style.display = 'block';
+              } else {
+                output.textContent = JSON.stringify(resultsData, null, 2);
+                output.style.display = 'block';
+              }
             }
           } catch(e) {
             console.error('Failed to parse event line:', line, e);
@@ -225,8 +256,11 @@ async function scrapeWithRetry(url, apiKey, retries = 3, delayMs = 2000) {
 }
 
 // Nemotron extraction helper
-async function extractSchema(markdown, userPrompt, apiKey) {
-  const prompt = `From this content, extract the following information and return ONLY a clean JSON object: ${userPrompt}\nContent: ${markdown}`;
+async function extractSchema(markdown, userPrompt, apiKey, format = 'json') {
+  let prompt = `From this content, extract the following information and return ONLY a clean JSON object: ${userPrompt}\nContent: ${markdown}`;
+  if (format === 'text') {
+    prompt = `From this content, extract the following information and return it as clean, readable plain text with clear labels:\n${userPrompt}\nContent: ${markdown}`;
+  }
 
   const nvidiaUrl = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
   const response = await fetch(nvidiaUrl, {
@@ -263,11 +297,16 @@ async function extractSchema(markdown, userPrompt, apiKey) {
 
   const text = json.choices[0].message.content.trim();
   
-  // Clean JSON formatting from Nemotron
+  // Clean formatting tags from Nemotron
   let cleaned = text;
   if (cleaned.startsWith('</think>')) {
     cleaned = cleaned.replace(/^<\/think>\s*/, '').trim();
   }
+
+  if (format === 'text') {
+    return cleaned;
+  }
+
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```json\s*/, '').replace(/```$/, '').trim();
   }
@@ -281,7 +320,8 @@ async function extractSchema(markdown, userPrompt, apiKey) {
 
 // POST /scrape endpoint
 app.post('/scrape', async (req, res) => {
-  const { urls, prompt } = req.body;
+  const { urls, prompt, format } = req.body;
+  const outFormat = format || 'json';
 
   // Validation
   if (!urls || !Array.isArray(urls)) {
@@ -294,6 +334,10 @@ app.post('/scrape', async (req, res) => {
 
   if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
     return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+
+  if (outFormat !== 'json' && outFormat !== 'text') {
+    return res.status(400).json({ error: 'format must be either "json" or "text"' });
   }
 
   const firecrawlKey = process.env.FIRECRAWL_API_KEY;
@@ -314,7 +358,7 @@ app.post('/scrape', async (req, res) => {
       console.log('2. Firecrawl done:', Date.now());
 
       // 2. Extract schema using Nemotron
-      const data = await extractSchema(markdown, prompt, nemotronKey);
+      const data = await extractSchema(markdown, prompt, nemotronKey, outFormat);
       console.log('3. Claude done:', Date.now());
 
       return { url, data, success: true };
@@ -346,6 +390,7 @@ app.post('/scrape', async (req, res) => {
 
   const output = {
     state_id: stateId,
+    format: outFormat,
     results,
     failed,
     total: urls.length,
@@ -367,7 +412,8 @@ app.post('/scrape', async (req, res) => {
 
 // POST /scrape-stream endpoint
 app.post('/scrape-stream', async (req, res) => {
-  const { urls, prompt } = req.body;
+  const { urls, prompt, format } = req.body;
+  const outFormat = format || 'json';
 
   // Validation
   if (!urls || !Array.isArray(urls)) {
@@ -380,6 +426,10 @@ app.post('/scrape-stream', async (req, res) => {
 
   if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
     return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+
+  if (outFormat !== 'json' && outFormat !== 'text') {
+    return res.status(400).json({ error: 'format must be either "json" or "text"' });
   }
 
   const firecrawlKey = process.env.FIRECRAWL_API_KEY;
@@ -408,7 +458,7 @@ app.post('/scrape-stream', async (req, res) => {
       const markdown = await scrapeWithRetry(url, firecrawlKey);
       console.log('2. Firecrawl done:', Date.now());
 
-      const data = await extractSchema(markdown, prompt, nemotronKey);
+      const data = await extractSchema(markdown, prompt, nemotronKey, outFormat);
       console.log('3. Claude done:', Date.now());
 
       urlResult = { url, data, success: true };
@@ -438,6 +488,7 @@ app.post('/scrape-stream', async (req, res) => {
 
   const output = {
     state_id: stateId,
+    format: outFormat,
     results,
     failed,
     total: urls.length,
