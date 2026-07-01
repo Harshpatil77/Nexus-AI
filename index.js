@@ -11,7 +11,6 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Root landing page with test form
 app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
 <html>
@@ -25,7 +24,9 @@ label { display: block; font-weight: bold; margin-top: 16px; }
 textarea { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 14px; padding: 8px; margin-top: 4px; }
 button { margin-top: 16px; padding: 10px 24px; font-size: 16px; font-family: monospace; cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
-#status { margin-top: 12px; font-weight: bold; }
+#status { margin-top: 12px; font-weight: bold; line-height: 1.5; }
+#progressContainer { margin-top: 12px; background: #eee; border: 1px solid #ccc; height: 16px; width: 100%; display: none; }
+#progressBar { background: #333; height: 100%; width: 0%; transition: width 0.1s linear; }
 #output { margin-top: 12px; background: #f4f4f4; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; display: none; }
 </style>
 </head>
@@ -43,6 +44,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <button type="submit" id="submitBtn">Run Scrape</button>
 </form>
 <div id="status"></div>
+<div id="progressContainer"><div id="progressBar"></div></div>
 <pre id="output"></pre>
 
 <hr>
@@ -53,6 +55,8 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   e.preventDefault();
   const btn = document.getElementById('submitBtn');
   const status = document.getElementById('status');
+  const progressContainer = document.getElementById('progressContainer');
+  const progressBar = document.getElementById('progressBar');
   const output = document.getElementById('output');
 
   const urlsRaw = document.getElementById('urls').value.trim();
@@ -64,8 +68,23 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   const urls = urlsRaw.split('\\n').map(u => u.trim()).filter(u => u.length > 0);
 
   btn.disabled = true;
-  status.textContent = 'Scraping ' + urls.length + ' URL(s)... please wait.';
   output.style.display = 'none';
+
+  // Estimate duration: assume ~10 seconds per URL if processed sequentially, but since limit is 5,
+  // we scale the baseline estimation accordingly.
+  const estimatedSeconds = Math.max(30, Math.ceil(urls.length / 5) * 12);
+  let elapsedSeconds = 0;
+
+  progressContainer.style.display = 'block';
+  progressBar.style.width = '0%';
+  status.innerHTML = 'Processing ' + urls.length + ' URLs...<br>0.0s elapsed (Estimated: ~' + estimatedSeconds + 's).<br>Grab a coffee ☕';
+
+  const timer = setInterval(() => {
+    elapsedSeconds += 0.1;
+    const pct = Math.min(95, (elapsedSeconds / estimatedSeconds) * 100);
+    progressBar.style.width = pct + '%';
+    status.innerHTML = 'Processing ' + urls.length + ' URLs...<br>' + elapsedSeconds.toFixed(1) + 's elapsed (Estimated: ~' + estimatedSeconds + 's).<br>Grab a coffee ☕';
+  }, 100);
 
   try {
     const res = await fetch('/scrape', {
@@ -74,10 +93,14 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
       body: JSON.stringify({ urls, prompt: promptRaw })
     });
     const data = await res.json();
+    clearInterval(timer);
+    progressBar.style.width = '100%';
     output.textContent = JSON.stringify(data, null, 2);
     output.style.display = 'block';
     status.textContent = 'Done — ' + data.succeeded + '/' + data.total + ' succeeded. State ID: ' + data.state_id;
   } catch(err) {
+    clearInterval(timer);
+    progressBar.style.width = '0%';
     status.textContent = 'Request failed: ' + err.message;
   } finally {
     btn.disabled = false;
