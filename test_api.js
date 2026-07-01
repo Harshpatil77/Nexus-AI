@@ -38,19 +38,20 @@ async function runTests() {
     });
   });
 
-  mockApp.post('/anthropic', (req, res) => {
+  mockApp.post('/nvidia', (req, res) => {
     anthropicCalls++;
     const { messages } = req.body;
-    const content = messages[0].content;
-    console.log('[Mock Anthropic] Simulating Claude schema extraction');
+    console.log('[Mock NVIDIA] Simulating Nemotron schema extraction');
     
     return res.json({
-      content: [
+      choices: [
         {
-          text: JSON.stringify({
-            title: "Mocked Page Title",
-            description: "Mocked Page Description"
-          })
+          message: {
+            content: JSON.stringify({
+              title: "Mocked Page Title",
+              description: "Mocked Page Description"
+            })
+          }
         }
       ]
     });
@@ -66,9 +67,9 @@ async function runTests() {
     ...process.env,
     PORT: '3000',
     FIRECRAWL_API_KEY: 'test-firecrawl-key',
-    ANTHROPIC_API_KEY: 'test-anthropic-key',
+    NVIDIA_API_KEY: 'test-nvidia-key',
     FIRECRAWL_API_URL: 'http://localhost:4000/firecrawl',
-    ANTHROPIC_API_URL: 'http://localhost:4000/anthropic'
+    NVIDIA_API_URL: 'http://localhost:4000/nvidia'
   };
 
   const serverProcess = spawn('node', ['index.js'], { env });

@@ -75,43 +75,42 @@ async function scrapeWithRetry(url, apiKey, retries = 3, delayMs = 2000) {
   throw lastError || new Error(`Failed to scrape after ${retries} retries`);
 }
 
-// Claude extraction helper
+// Nemotron extraction helper
 async function extractSchema(markdown, schema, apiKey) {
   const prompt = `Extract the following fields from this content and return ONLY a JSON object with these exact keys: ${JSON.stringify(schema)}. Content: ${markdown}`;
 
-  const anthropicUrl = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
-  const response = await fetch(anthropicUrl, {
+  const nvidiaUrl = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
+  const response = await fetch(nvidiaUrl, {
     method: 'POST',
     headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json'
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 4000,
+      model: 'nvidia/llama-3.1-nemotron-70b-instruct',
       messages: [
         {
           role: 'user',
           content: prompt
         }
-      ]
+      ],
+      temperature: 0.1
     })
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Anthropic API responded with status ${response.status}: ${errorText}`);
+    throw new Error(`NVIDIA API responded with status ${response.status}: ${errorText}`);
   }
 
   const json = await response.json();
-  if (!json.content || json.content.length === 0 || !json.content[0].text) {
-    throw new Error(`Anthropic API returned unexpected response: ${JSON.stringify(json)}`);
+  if (!json.choices || json.choices.length === 0 || !json.choices[0].message || !json.choices[0].message.content) {
+    throw new Error(`NVIDIA API returned unexpected response: ${JSON.stringify(json)}`);
   }
 
-  const text = json.content[0].text.trim();
+  const text = json.choices[0].message.content.trim();
   
-  // Clean JSON formatting from Claude
+  // Clean JSON formatting from Nemotron
   let cleaned = text;
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```json\s*/, '').replace(/```$/, '').trim();
@@ -120,7 +119,7 @@ async function extractSchema(markdown, schema, apiKey) {
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    throw new Error(`Failed to parse Claude's response as JSON: ${err.message}. Content was: ${text}`);
+    throw new Error(`Failed to parse Nemotron's response as JSON: ${err.message}. Content was: ${text}`);
   }
 }
 
@@ -142,9 +141,9 @@ app.post('/scrape', async (req, res) => {
   }
 
   const firecrawlKey = process.env.FIRECRAWL_API_KEY;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const nemotronKey = process.env.NVIDIA_API_KEY || process.env.ANTHROPIC_API_KEY;
 
-  if (!firecrawlKey || !anthropicKey) {
+  if (!firecrawlKey || !nemotronKey) {
     return res.status(500).json({ error: 'Server configuration error: Missing API keys' });
   }
 
@@ -155,8 +154,8 @@ app.post('/scrape', async (req, res) => {
     try {
       // 1. Scraping with retry
       const markdown = await scrapeWithRetry(url, firecrawlKey);
-      // 2. Extract schema using Claude
-      const data = await extractSchema(markdown, schema, anthropicKey);
+      // 2. Extract schema using Nemotron
+      const data = await extractSchema(markdown, schema, nemotronKey);
       return { url, data, success: true };
     } catch (error) {
       return { url, reason: error.message || String(error), success: false };
