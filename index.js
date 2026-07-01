@@ -27,7 +27,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 #status { margin-top: 12px; font-weight: bold; line-height: 1.5; }
 #progressContainer { margin-top: 12px; background: #eee; border: 1px solid #ccc; height: 16px; width: 100%; display: none; }
 #progressBar { background: #333; height: 100%; width: 0%; transition: width 0.1s linear; }
-#output { margin-top: 12px; background: #f4f4f4; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; display: none; }
+#urlList { margin-top: 16px; border-left: 3px solid #ccc; padding-left: 12px; font-size: 14px; }
+.url-item { margin: 6px 0; }
+#output { margin-top: 16px; background: #f4f4f4; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; display: none; }
 </style>
 </head>
 <body>
@@ -45,10 +47,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 </form>
 <div id="status"></div>
 <div id="progressContainer"><div id="progressBar"></div></div>
+<div id="urlList"></div>
 <pre id="output"></pre>
 
 <hr>
-<p><b>Endpoints:</b> POST /scrape &middot; GET /scrape/:state_id &middot; GET /health</p>
+<p><b>Endpoints:</b> POST /scrape &middot; POST /scrape-stream &middot; GET /scrape/:state_id &middot; GET /health</p>
 
 <script>
 document.getElementById('scrapeForm').addEventListener('submit', async function(e) {
@@ -57,6 +60,7 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   const status = document.getElementById('status');
   const progressContainer = document.getElementById('progressContainer');
   const progressBar = document.getElementById('progressBar');
+  const urlList = document.getElementById('urlList');
   const output = document.getElementById('output');
 
   const urlsRaw = document.getElementById('urls').value.trim();
@@ -69,39 +73,84 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
 
   btn.disabled = true;
   output.style.display = 'none';
-
-  // Estimate duration: assume ~10 seconds per URL if processed sequentially, but since limit is 5,
-  // we scale the baseline estimation accordingly.
-  const estimatedSeconds = Math.max(30, Math.ceil(urls.length / 5) * 12);
-  let elapsedSeconds = 0;
+  urlList.innerHTML = '';
+  urls.forEach((url, i) => {
+    urlList.innerHTML += '<div class="url-item" id="url-' + i + '">' + url + ' ⏳</div>';
+  });
 
   progressContainer.style.display = 'block';
   progressBar.style.width = '0%';
-  status.innerHTML = 'Processing ' + urls.length + ' URLs...<br>0.0s elapsed (Estimated: ~' + estimatedSeconds + 's).<br>Grab a coffee ☕';
-
-  const timer = setInterval(() => {
-    elapsedSeconds += 0.1;
-    const pct = Math.min(95, (elapsedSeconds / estimatedSeconds) * 100);
-    progressBar.style.width = pct + '%';
-    status.innerHTML = 'Processing ' + urls.length + ' URLs...<br>' + elapsedSeconds.toFixed(1) + 's elapsed (Estimated: ~' + estimatedSeconds + 's).<br>Grab a coffee ☕';
-  }, 100);
+  status.textContent = 'Connecting to stream...';
 
   try {
-    const res = await fetch('/scrape', {
+    const res = await fetch('/scrape-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls, prompt: promptRaw })
     });
-    const data = await res.json();
-    clearInterval(timer);
-    progressBar.style.width = '100%';
-    output.textContent = JSON.stringify(data, null, 2);
-    output.style.display = 'block';
-    status.textContent = 'Done — ' + data.succeeded + '/' + data.total + ' succeeded. State ID: ' + data.state_id;
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let parsedErr = {};
+      try { parsedErr = JSON.parse(errText); } catch(e) {}
+      throw new Error(parsedErr.error || 'Server returned status ' + res.status);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    status.textContent = 'Scraping URL 0 of ' + urls.length + '...';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const jsonStr = line.slice(6).trim();
+          try {
+            const eventData = JSON.parse(jsonStr);
+            if (eventData.type === 'progress') {
+              const completed = eventData.completed;
+              const total = eventData.total;
+              const currentUrl = eventData.current_url;
+              const success = eventData.result.success;
+
+              const pct = (completed / total) * 100;
+              progressBar.style.width = pct + '%';
+              status.textContent = 'Scraping URL ' + completed + ' of ' + total + '...';
+
+              // Update matching URL item emoji
+              const idx = urls.indexOf(currentUrl);
+              if (idx !== -1) {
+                const el = document.getElementById('url-' + idx);
+                if (el) {
+                  el.textContent = currentUrl + ' ' + (success ? '✅' : '❌');
+                }
+              }
+            } else if (eventData.type === 'done') {
+              progressBar.style.width = '100%';
+              status.textContent = 'Done — ' + eventData.succeeded + ' succeeded, ' + eventData.failed_count + ' failed. State ID: ' + eventData.state_id;
+
+              // Retrieve final JSON state
+              const resultsRes = await fetch('/scrape/' + eventData.state_id);
+              const resultsData = await resultsRes.json();
+              output.textContent = JSON.stringify(resultsData, null, 2);
+              output.style.display = 'block';
+            }
+          } catch(e) {
+            console.error('Failed to parse event line:', line, e);
+          }
+        }
+      }
+    }
   } catch(err) {
-    clearInterval(timer);
-    progressBar.style.width = '0%';
     status.textContent = 'Request failed: ' + err.message;
+    progressBar.style.width = '0%';
   } finally {
     btn.disabled = false;
   }
@@ -314,6 +363,106 @@ app.post('/scrape', async (req, res) => {
   }
 
   return res.status(200).json(output);
+});
+
+// POST /scrape-stream endpoint
+app.post('/scrape-stream', async (req, res) => {
+  const { urls, prompt } = req.body;
+
+  // Validation
+  if (!urls || !Array.isArray(urls)) {
+    return res.status(400).json({ error: 'urls must be an array' });
+  }
+
+  if (urls.length < 1 || urls.length > 100) {
+    return res.status(400).json({ error: 'urls array must contain between 1 and 100 items' });
+  }
+
+  if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+
+  const firecrawlKey = process.env.FIRECRAWL_API_KEY;
+  const nemotronKey = process.env.NVIDIA_API_KEY || process.env.ANTHROPIC_API_KEY;
+
+  if (!firecrawlKey || !nemotronKey) {
+    return res.status(500).json({ error: 'Server configuration error: Missing API keys' });
+  }
+
+  const stateId = crypto.randomUUID();
+
+  // Set SSE Headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  let completedCount = 0;
+  const results = [];
+  const failed = [];
+
+  // Create tasks for each URL that also streams progress events
+  const tasks = urls.map((url) => async () => {
+    let urlResult;
+    try {
+      console.log('1. Starting Firecrawl:', Date.now());
+      const markdown = await scrapeWithRetry(url, firecrawlKey);
+      console.log('2. Firecrawl done:', Date.now());
+
+      const data = await extractSchema(markdown, prompt, nemotronKey);
+      console.log('3. Claude done:', Date.now());
+
+      urlResult = { url, data, success: true };
+      results.push({ url, data });
+    } catch (error) {
+      console.log('Task execution failed:', error.message);
+      urlResult = { url, reason: error.message || String(error), success: false };
+      failed.push({ url, reason: urlResult.reason });
+    }
+
+    completedCount++;
+
+    // Send progress event
+    res.write(`data: ${JSON.stringify({
+      type: "progress",
+      completed: completedCount,
+      total: urls.length,
+      current_url: url,
+      result: urlResult
+    })}\n\n`);
+
+    return urlResult;
+  });
+
+  // Execute tasks with a concurrency limit of 5
+  await runWithConcurrencyLimit(tasks, 5);
+
+  const output = {
+    state_id: stateId,
+    results,
+    failed,
+    total: urls.length,
+    succeeded: results.length,
+    failed_count: failed.length
+  };
+
+  // Save the full output to local file
+  try {
+    const filePath = path.join(process.cwd(), `${stateId}.json`);
+    await fs.writeFile(filePath, JSON.stringify(output, null, 2), 'utf-8');
+    console.log('4. File saved:', Date.now());
+  } catch (err) {
+    console.error(`Failed to save state file for ${stateId}:`, err);
+  }
+
+  // Send done event at the end
+  res.write(`data: ${JSON.stringify({
+    type: "done",
+    state_id: stateId,
+    succeeded: results.length,
+    failed_count: failed.length
+  })}\n\n`);
+
+  res.end();
 });
 
 // GET /scrape/:state_id endpoint
