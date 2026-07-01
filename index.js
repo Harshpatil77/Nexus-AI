@@ -195,6 +195,7 @@ async function extractSchema(markdown, userPrompt, apiKey) {
         }
       ],
       temperature: 0.1,
+      reasoning_budget: 0,
       chat_template_kwargs: {
         enable_thinking: false
       }
