@@ -15,88 +15,573 @@ app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
 <html>
 <head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nexus AI</title>
 <style>
-body { font-family: monospace; max-width: 700px; margin: 40px auto; padding: 0 20px; }
-h1 { margin-bottom: 4px; }
-p.sub { color: #666; margin-top: 0; }
-label { display: block; font-weight: bold; margin-top: 16px; }
-textarea { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 14px; padding: 8px; margin-top: 4px; }
-button { margin-top: 16px; padding: 10px 24px; font-size: 16px; font-family: monospace; cursor: pointer; }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-#status { margin-top: 12px; font-weight: bold; line-height: 1.5; }
-#progressContainer { margin-top: 12px; background: #eee; border: 1px solid #ccc; height: 16px; width: 100%; display: none; }
-#progressBar { background: #333; height: 100%; width: 0%; transition: width 0.1s linear; }
-#urlList { margin-top: 16px; border-left: 3px solid #ccc; padding-left: 12px; font-size: 14px; }
-.url-item { margin: 6px 0; }
-#output { margin-top: 16px; background: #f4f4f4; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; display: none; }
-#outputText { margin-top: 16px; background: #ffffff; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; font-family: inherit; display: none; line-height: 1.5; }
-.url-hint { color: #888; font-size: 12px; margin-top: 4px; }
-.url-hint a { color: #888; }
-#limitError { color: #c0392b; font-weight: bold; margin-top: 8px; font-size: 14px; display: none; }
-#limitError a { color: #c0392b; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&family=Space+Grotesk:wght@500;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #0A0A0F;
+  color: #F8F8FF;
+  font-family: 'Inter', sans-serif;
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 0 24px;
+  line-height: 1.6;
+}
+
+h1 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 32px;
+  color: #F8F8FF;
+  letter-spacing: -0.5px;
+}
+
+p.sub {
+  font-family: 'Inter', sans-serif;
+  color: #6B7280;
+  font-size: 14px;
+  margin-top: 6px;
+  margin-bottom: 24px;
+}
+
+.divider {
+  height: 1px;
+  background-color: #6366F1;
+  opacity: 0.3;
+  margin-bottom: 32px;
+}
+
+.card {
+  background: #13131A;
+  border: 1px solid #1E1E2E;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+label {
+  display: block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  color: #F8F8FF;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+textarea {
+  width: 100%;
+  background: #0A0A0F;
+  border: 1px solid #1E1E2E;
+  color: #F8F8FF;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  padding: 12px;
+  resize: vertical;
+  outline: none;
+}
+
+textarea:focus {
+  border-color: #6366F1;
+}
+
+.url-hint {
+  color: #6B7280;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.url-hint a {
+  color: #6366F1;
+  text-decoration: none;
+}
+
+.url-hint a:hover {
+  text-decoration: underline;
+}
+
+#limitError {
+  color: #EF4444;
+  font-weight: 600;
+  margin-top: 12px;
+  font-size: 13px;
+  display: none;
+}
+
+#limitError a {
+  color: #EF4444;
+  text-decoration: underline;
+}
+
+.options-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.pill-group {
+  display: flex;
+  border: 1px solid #1E1E2E;
+  background: #13131A;
+  padding: 2px;
+}
+
+.pill-group input[type="radio"] {
+  display: none;
+}
+
+.pill-group label {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6B7280;
+  margin-bottom: 0;
+  transition: all 0.15s ease;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pill-group input[type="radio"]:checked + label {
+  background: #6366F1;
+  color: #F8F8FF;
+}
+
+/* Custom Checkbox */
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: #F8F8FF;
+  font-family: 'Inter', sans-serif;
+}
+
+.checkbox-container input {
+  display: none;
+}
+
+.checkbox-custom {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #1E1E2E;
+  background: #0A0A0F;
+  position: relative;
+  display: inline-block;
+}
+
+.checkbox-container input:checked + .checkbox-custom::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  background: #6366F1;
+}
+
+/* Run Scrape Button & Pulse */
+.btn-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+button[type="submit"] {
+  width: 100%;
+  background: #6366F1;
+  color: #F8F8FF;
+  border: none;
+  padding: 14px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button[type="submit"]:hover:not(:disabled) {
+  background: #4F46E5;
+}
+
+button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+.pulse-active {
+  animation: pulse-ring 1.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+/* Progress card */
+#progressCard {
+  background: #13131A;
+  border: 1px solid #1E1E2E;
+  padding: 20px;
+  margin-top: 24px;
+  display: none;
+}
+
+#status {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: #F8F8FF;
+}
+
+#progressContainer {
+  background: #0A0A0F;
+  border: 1px solid #1E1E2E;
+  height: 8px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+#progressBar {
+  background: #6366F1;
+  height: 100%;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+#urlList {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: #F8F8FF;
+}
+
+.url-item {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  padding: 10px;
+  background: #0A0A0F;
+  border: 1px solid #1E1E2E;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  display: inline-block;
+  animation: spin 1.2s linear infinite;
+}
+
+/* Output Card */
+.output-card {
+  background: #13131A;
+  border: 1px solid #1E1E2E;
+  padding: 20px;
+  margin-top: 24px;
+  display: none;
+}
+
+.output-card label {
+  margin-bottom: 16px;
+}
+
+pre {
+  background: #0A0A0F;
+  border: 1px solid #1E1E2E;
+  padding: 16px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: #F8F8FF;
+  line-height: 1.5;
+}
+
+/* Syntax Highlighting */
+.json-key { color: #818CF8; font-weight: 600; }
+.json-string { color: #34D399; }
+.json-number { color: #F59E0B; }
+.json-boolean { color: #F472B6; }
+.json-null { color: #F87171; }
+
+/* Markdown rendering tags */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  border: 1px solid #1E1E2E;
+}
+
+th, td {
+  border: 1px solid #1E1E2E;
+  padding: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+th {
+  background: #0A0A0F;
+  font-family: 'Space Grotesk', sans-serif;
+  color: #F8F8FF;
+  text-align: left;
+}
+
+td {
+  color: #D1D5DB;
+}
+
+footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #1E1E2E;
+  font-size: 12px;
+  color: #6B7280;
+  font-family: 'Inter', sans-serif;
+}
+
+footer a {
+  color: #6366F1;
+  text-decoration: none;
+}
 </style>
 </head>
 <body>
-<h1>Nexus AI</h1>
-<p class="sub">The execution layer for autonomous AI agents.</p>
-<hr>
-<form id="scrapeForm">
-  <label for="urls">URLs (one per line):</label>
-  <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
-  <div class="url-hint">Free tier: 5 URLs per request. Need more? <a href="mailto:patilharsh310708@gmail.com">Contact us</a>.</div>
-  <div id="limitError"></div>
+  <h1>Nexus AI</h1>
+  <p class="sub">The execution layer for autonomous AI agents.</p>
+  <div class="divider"></div>
 
-  <label for="prompt">What do you want to extract?</label>
-  <textarea id="prompt" rows="4" placeholder="Extract the company name, email, and pricing from each page"></textarea>
+  <form id="scrapeForm">
+    <!-- Card 1: Target URLs -->
+    <div class="card">
+      <label for="urls">Target URLs</label>
+      <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
+      <div class="url-hint">Free tier: 5 URLs per request. Need more? <a href="mailto:patilharsh310708@gmail.com">Contact us</a>.</div>
+      <div id="limitError"></div>
+    </div>
 
-  <label>Output Format:</label>
-  <div style="margin-top: 6px; display: flex; gap: 20px; align-items: center;">
-    <label style="display: inline; font-weight: normal; margin-top: 0; cursor: pointer;">
-      <input type="radio" name="format" value="json" style="cursor: pointer;"> JSON
-    </label>
-    <label style="display: inline; font-weight: normal; margin-top: 0; cursor: pointer;">
-      <input type="radio" name="format" value="text" checked style="cursor: pointer;"> Plain Text
-    </label>
+    <!-- Card 2: Extraction Instructions -->
+    <div class="card">
+      <label for="prompt">Extraction Instructions</label>
+      <textarea id="prompt" rows="4" placeholder="Extract the company name, email, and pricing from each page"></textarea>
+    </div>
+
+    <!-- Option row -->
+    <div class="options-row">
+      <!-- Pill Toggles for Format -->
+      <div>
+        <label>Output Format</label>
+        <div class="pill-group">
+          <input type="radio" id="format-json" name="format" value="json">
+          <label for="format-json">JSON</label>
+          
+          <input type="radio" id="format-text" name="format" value="text" checked>
+          <label for="format-text">Plain Text</label>
+        </div>
+      </div>
+
+      <!-- Compare Mode -->
+      <label class="checkbox-container" style="margin-top: 24px;">
+        <input type="checkbox" id="compareMode">
+        <span class="checkbox-custom"></span>
+        <span>Compare Mode</span>
+        <span style="color: #6B7280; font-size: 11px;">(combine content)</span>
+      </label>
+    </div>
+
+    <!-- Run Scrape Wrapper -->
+    <div class="btn-wrapper">
+      <button type="submit" id="submitBtn">Run Scrape</button>
+    </div>
+  </form>
+
+  <!-- Progress Card -->
+  <div id="progressCard">
+    <div id="status">Connecting to stream...</div>
+    <div id="progressContainer">
+      <div id="progressBar"></div>
+    </div>
+    <div id="urlList"></div>
   </div>
 
-  <label style="margin-top: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer;">
-    <input type="checkbox" id="compareMode" style="cursor: pointer;">
-    <span style="font-weight: normal;">Compare Mode</span>
-    <span style="color: #888; font-size: 12px; font-weight: normal;">(combine all URLs into one AI analysis)</span>
-  </label>
+  <!-- Output Cards -->
+  <div id="jsonOutputCard" class="output-card">
+    <label>Extracted JSON Output</label>
+    <pre id="output"></pre>
+  </div>
 
-  <button type="submit" id="submitBtn">Run Scrape</button>
-</form>
-<div id="status"></div>
-<div id="progressContainer"><div id="progressBar"></div></div>
-<div id="urlList"></div>
-<pre id="output"></pre>
-<pre id="outputText"></pre>
+  <div id="textOutputCard" class="output-card">
+    <label>Extracted Plain Text Output</label>
+    <pre id="outputText" style="font-family: 'Inter', sans-serif; line-height: 1.6;"></pre>
+  </div>
 
-<hr>
-<p><b>Endpoints:</b> POST /scrape &middot; POST /scrape-stream &middot; GET /scrape/:state_id &middot; GET /health</p>
+  <footer>
+    Free tier: 5 URLs max &middot; Need more? <a href="mailto:patilharsh310708@gmail.com">patilharsh310708@gmail.com</a>
+  </footer>
 
 <script>
+// JSON syntax highlighter
+function syntaxHighlightJson(jsonObj) {
+  let json = JSON.stringify(jsonObj, null, 2);
+  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, function (match) {
+    let cls = 'json-number';
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'json-key';
+      } else {
+        cls = 'json-string';
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'json-boolean';
+    } else if (/null/.test(match)) {
+      cls = 'json-null';
+    }
+    return '<span class="' + cls + '">' + match + '</span>';
+  });
+}
+
+// Simple Markdown table and basic tags parser
+function markdownToHtml(text) {
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const lines = html.split('\\n');
+  let result = [];
+  let inTable = false;
+  let tableRows = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+
+    if (line.startsWith('|') && line.endsWith('|')) {
+      if (line.match(/^\\|[\\s\\-:|]+\\|$/)) {
+        continue;
+      }
+      inTable = true;
+      const cells = line.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+      tableRows.push(cells);
+      continue;
+    } else {
+      if (inTable) {
+        let tableHtml = '<table>';
+        tableRows.forEach((row, rIdx) => {
+          tableHtml += '<tr>';
+          row.forEach(cell => {
+            let cellContent = cell
+              .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
+              .replace(/\\*(.*?)\\*/g, '<em>$1</em>')
+              .replace(/&lt;br&gt;/g, '<br>')
+              .replace(/&lt;br\\s*\\/&gt;/g, '<br>');
+            if (rIdx === 0) {
+              tableHtml += '<th>' + cellContent + '</th>';
+            } else {
+              tableHtml += '<td>' + cellContent + '</td>';
+            }
+          });
+          tableHtml += '</tr>';
+        });
+        tableHtml += '</table>';
+        result.push(tableHtml);
+        tableRows = [];
+        inTable = false;
+      }
+    }
+
+    line = line.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+    line = line.replace(/\\*(.*?)\\*/g, '<em>$1</em>');
+
+    if (line.startsWith('### ')) {
+      result.push('<h3 style="margin-top:16px; margin-bottom:8px; font-family:\\'Space Grotesk\\', sans-serif;">' + line.substring(4) + '</h3>');
+    } else if (line.startsWith('## ')) {
+      result.push('<h2 style="margin-top:20px; margin-bottom:10px; font-family:\\'Space Grotesk\\', sans-serif;">' + line.substring(3) + '</h2>');
+    } else if (line.startsWith('# ')) {
+      result.push('<h1 style="margin-top:24px; margin-bottom:12px; font-family:\\'Space Grotesk\\', sans-serif;">' + line.substring(2) + '</h1>');
+    } else if (line.startsWith('- ')) {
+      result.push('<li style="margin-left:20px; margin-bottom:4px;">' + line.substring(2) + '</li>');
+    } else if (line === '---') {
+      result.push('<hr style="border:0; height:1px; background:#1E1E2E; margin:16px 0;">');
+    } else if (line.length > 0) {
+      result.push('<p style="margin-bottom:8px;">' + line + '</p>');
+    } else {
+      result.push('<br>');
+    }
+  }
+
+  if (inTable) {
+    let tableHtml = '<table>';
+    tableRows.forEach((row, rIdx) => {
+      tableHtml += '<tr>';
+      row.forEach(cell => {
+        let cellContent = cell
+          .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
+          .replace(/\\*(.*?)\\*/g, '<em>$1</em>')
+          .replace(/&lt;br&gt;/g, '<br>')
+          .replace(/&lt;br\\s*\\/&gt;/g, '<br>');
+        if (rIdx === 0) {
+          tableHtml += '<th>' + cellContent + '</th>';
+        } else {
+          tableHtml += '<td>' + cellContent + '</td>';
+        }
+      });
+      tableHtml += '</tr>';
+    });
+    tableHtml += '</table>';
+    result.push(tableHtml);
+  }
+
+  return result.join('\\n');
+}
+
 document.getElementById('scrapeForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const btn = document.getElementById('submitBtn');
   const status = document.getElementById('status');
-  const progressContainer = document.getElementById('progressContainer');
+  const progressCard = document.getElementById('progressCard');
   const progressBar = document.getElementById('progressBar');
   const urlList = document.getElementById('urlList');
+  const jsonOutputCard = document.getElementById('jsonOutputCard');
+  const textOutputCard = document.getElementById('textOutputCard');
   const output = document.getElementById('output');
   const outputText = document.getElementById('outputText');
-
   const limitError = document.getElementById('limitError');
+
   const urlsRaw = document.getElementById('urls').value.trim();
   const promptRaw = document.getElementById('prompt').value.trim();
   const format = document.querySelector('input[name="format"]:checked').value;
   const compare = document.getElementById('compareMode').checked;
 
   limitError.style.display = 'none';
-  if (!urlsRaw) { status.textContent = 'Error: Enter at least one URL.'; return; }
-  if (!promptRaw) { status.textContent = 'Error: Enter an extraction prompt.'; return; }
+  if (!urlsRaw) { status.textContent = 'Error: Enter at least one URL.'; progressCard.style.display = 'block'; return; }
+  if (!promptRaw) { status.textContent = 'Error: Enter an extraction prompt.'; progressCard.style.display = 'block'; return; }
 
   const urls = urlsRaw.split('\\n').map(u => u.trim()).filter(u => u.length > 0);
 
@@ -107,14 +592,15 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   }
 
   btn.disabled = true;
-  output.style.display = 'none';
-  outputText.style.display = 'none';
+  btn.classList.add('pulse-active');
+  jsonOutputCard.style.display = 'none';
+  textOutputCard.style.display = 'none';
   urlList.innerHTML = '';
   urls.forEach((url, i) => {
-    urlList.innerHTML += '<div class="url-item" id="url-' + i + '">' + url + ' ⏳</div>';
+    urlList.innerHTML += '<div class="url-item" id="url-' + i + '"><span class="status-icon spinning" id="icon-' + i + '" style="color:#6366F1; margin-right:8px; font-weight:bold;">⟳</span><span class="url-text">' + url + '</span></div>';
   });
 
-  progressContainer.style.display = 'block';
+  progressCard.style.display = 'block';
   progressBar.style.width = '0%';
   status.textContent = 'Connecting to stream...';
 
@@ -160,12 +646,18 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
               progressBar.style.width = pct + '%';
               status.textContent = 'Scraping URL ' + completed + ' of ' + total + '...';
 
-              // Update matching URL item emoji
               const idx = urls.indexOf(currentUrl);
               if (idx !== -1) {
-                const el = document.getElementById('url-' + idx);
-                if (el) {
-                  el.textContent = currentUrl + ' ' + (success ? '✅' : '❌');
+                const icon = document.getElementById('icon-' + idx);
+                if (icon) {
+                  icon.className = 'status-icon';
+                  if (success) {
+                    icon.style.color = '#22C55E';
+                    icon.innerHTML = '✓';
+                  } else {
+                    icon.style.color = '#EF4444';
+                    icon.innerHTML = '✗';
+                  }
                 }
               }
             } else if (eventData.type === 'done') {
@@ -179,7 +671,11 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
               if (resultsData.format === 'text') {
                 let formattedText = '';
                 resultsData.results.forEach((r, idx) => {
-                  formattedText += '=== URL: ' + r.url + ' ===\\n\\n' + r.data + '\\n\\n';
+                  if (resultsData.compare) {
+                    formattedText += '=== Combined Comparison ===\\n\\n' + r.data + '\\n\\n';
+                  } else {
+                    formattedText += '=== URL: ' + r.url + ' ===\\n\\n' + r.data + '\\n\\n';
+                  }
                 });
                 if (resultsData.failed.length > 0) {
                   formattedText += '=== Failed URLs ===\\n';
@@ -187,11 +683,11 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
                     formattedText += '- ' + f.url + ' (Reason: ' + f.reason + ')\\n';
                   });
                 }
-                outputText.textContent = formattedText.trim();
-                outputText.style.display = 'block';
+                outputText.innerHTML = markdownToHtml(formattedText.trim());
+                textOutputCard.style.display = 'block';
               } else {
-                output.textContent = JSON.stringify(resultsData, null, 2);
-                output.style.display = 'block';
+                output.innerHTML = syntaxHighlightJson(resultsData);
+                jsonOutputCard.style.display = 'block';
               }
             }
           } catch(e) {
@@ -205,6 +701,7 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
     progressBar.style.width = '0%';
   } finally {
     btn.disabled = false;
+    btn.classList.remove('pulse-active');
   }
 });
 </script>
