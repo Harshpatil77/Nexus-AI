@@ -44,7 +44,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 <form id="scrapeForm">
   <label for="urls">URLs (one per line):</label>
   <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
-  <div class="url-hint">Free tier: 5 URLs per request. Need more? <a href="mailto:harshpatil7745@gmail.com">Contact us</a>.</div>
+  <div class="url-hint">Free tier: 5 URLs per request. Need more? <a href="mailto:patilharsh310708@gmail.com">Contact us</a>.</div>
   <div id="limitError"></div>
 
   <label for="prompt">What do you want to extract?</label>
@@ -101,7 +101,7 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   const urls = urlsRaw.split('\\n').map(u => u.trim()).filter(u => u.length > 0);
 
   if (urls.length > 5) {
-    limitError.innerHTML = 'Free tier is limited to 5 URLs. You submitted ' + urls.length + ' URLs.<br>Need more? Email <a href="mailto:harshpatil7745@gmail.com">harshpatil7745@gmail.com</a> to unlock.';
+    limitError.innerHTML = 'Free tier is limited to 5 URLs. You submitted ' + urls.length + ' URLs.<br>Need more? Email <a href="mailto:patilharsh310708@gmail.com">patilharsh310708@gmail.com</a> to unlock.';
     limitError.style.display = 'block';
     return;
   }
@@ -363,7 +363,7 @@ app.post('/scrape', async (req, res) => {
 
   if (urls.length > 5) {
     return res.status(400).json({
-      error: 'Free tier is limited to 5 URLs per request. Need more? Contact harshpatil7745@gmail.com to unlock higher limits.',
+      error: 'Free tier is limited to 5 URLs per request. Need more? Contact patilharsh310708@gmail.com to unlock higher limits.',
       limit: 5,
       submitted: urls.length
     });
@@ -464,7 +464,7 @@ app.post('/scrape-stream', async (req, res) => {
 
   if (urls.length > 5) {
     return res.status(400).json({
-      error: 'Free tier is limited to 5 URLs per request. Need more? Contact harshpatil7745@gmail.com to unlock higher limits.',
+      error: 'Free tier is limited to 5 URLs per request. Need more? Contact patilharsh310708@gmail.com to unlock higher limits.',
       limit: 5,
       submitted: urls.length
     });
