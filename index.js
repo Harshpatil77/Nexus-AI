@@ -31,6 +31,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .url-item { margin: 6px 0; }
 #output { margin-top: 16px; background: #f4f4f4; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; display: none; }
 #outputText { margin-top: 16px; background: #ffffff; border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; font-family: inherit; display: none; line-height: 1.5; }
+.url-hint { color: #888; font-size: 12px; margin-top: 4px; }
+.url-hint a { color: #888; }
+#limitError { color: #c0392b; font-weight: bold; margin-top: 8px; font-size: 14px; display: none; }
+#limitError a { color: #c0392b; }
 </style>
 </head>
 <body>
@@ -40,6 +44,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 <form id="scrapeForm">
   <label for="urls">URLs (one per line):</label>
   <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
+  <div class="url-hint">Free tier: 5 URLs per request. Need more? <a href="mailto:harshpatil7745@gmail.com">Contact us</a>.</div>
+  <div id="limitError"></div>
 
   <label for="prompt">What do you want to extract?</label>
   <textarea id="prompt" rows="4" placeholder="Extract the company name, email, and pricing from each page"></textarea>
@@ -53,6 +59,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
       <input type="radio" name="format" value="text" checked style="cursor: pointer;"> Plain Text
     </label>
   </div>
+
+  <label style="margin-top: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+    <input type="checkbox" id="compareMode" style="cursor: pointer;">
+    <span style="font-weight: normal;">Compare Mode</span>
+    <span style="color: #888; font-size: 12px; font-weight: normal;">(combine all URLs into one AI analysis)</span>
+  </label>
 
   <button type="submit" id="submitBtn">Run Scrape</button>
 </form>
@@ -76,14 +88,23 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
   const output = document.getElementById('output');
   const outputText = document.getElementById('outputText');
 
+  const limitError = document.getElementById('limitError');
   const urlsRaw = document.getElementById('urls').value.trim();
   const promptRaw = document.getElementById('prompt').value.trim();
   const format = document.querySelector('input[name="format"]:checked').value;
+  const compare = document.getElementById('compareMode').checked;
 
+  limitError.style.display = 'none';
   if (!urlsRaw) { status.textContent = 'Error: Enter at least one URL.'; return; }
   if (!promptRaw) { status.textContent = 'Error: Enter an extraction prompt.'; return; }
 
   const urls = urlsRaw.split('\\n').map(u => u.trim()).filter(u => u.length > 0);
+
+  if (urls.length > 5) {
+    limitError.innerHTML = 'Free tier is limited to 5 URLs. You submitted ' + urls.length + ' URLs.<br>Need more? Email <a href="mailto:harshpatil7745@gmail.com">harshpatil7745@gmail.com</a> to unlock.';
+    limitError.style.display = 'block';
+    return;
+  }
 
   btn.disabled = true;
   output.style.display = 'none';
@@ -101,7 +122,7 @@ document.getElementById('scrapeForm').addEventListener('submit', async function(
     const res = await fetch('/scrape-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls, prompt: promptRaw, format })
+      body: JSON.stringify({ urls, prompt: promptRaw, format, compare })
     });
 
     if (!res.ok) {
@@ -336,8 +357,16 @@ app.post('/scrape', async (req, res) => {
     return res.status(400).json({ error: 'urls must be an array' });
   }
 
-  if (urls.length < 1 || urls.length > 100) {
-    return res.status(400).json({ error: 'urls array must contain between 1 and 100 items' });
+  if (urls.length < 1) {
+    return res.status(400).json({ error: 'urls array must contain at least 1 item' });
+  }
+
+  if (urls.length > 5) {
+    return res.status(400).json({
+      error: 'Free tier is limited to 5 URLs per request. Need more? Contact harshpatil7745@gmail.com to unlock higher limits.',
+      limit: 5,
+      submitted: urls.length
+    });
   }
 
   if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
@@ -420,16 +449,25 @@ app.post('/scrape', async (req, res) => {
 
 // POST /scrape-stream endpoint
 app.post('/scrape-stream', async (req, res) => {
-  const { urls, prompt, format } = req.body;
+  const { urls, prompt, format, compare } = req.body;
   const outFormat = format || 'json';
+  const compareMode = compare === true;
 
   // Validation
   if (!urls || !Array.isArray(urls)) {
     return res.status(400).json({ error: 'urls must be an array' });
   }
 
-  if (urls.length < 1 || urls.length > 100) {
-    return res.status(400).json({ error: 'urls array must contain between 1 and 100 items' });
+  if (urls.length < 1) {
+    return res.status(400).json({ error: 'urls array must contain at least 1 item' });
+  }
+
+  if (urls.length > 5) {
+    return res.status(400).json({
+      error: 'Free tier is limited to 5 URLs per request. Need more? Contact harshpatil7745@gmail.com to unlock higher limits.',
+      limit: 5,
+      submitted: urls.length
+    });
   }
 
   if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
@@ -457,46 +495,85 @@ app.post('/scrape-stream', async (req, res) => {
   let completedCount = 0;
   const results = [];
   const failed = [];
+  const scrapedMarkdowns = []; // For compare mode
 
-  // Create tasks for each URL that also streams progress events
-  const tasks = urls.map((url) => async () => {
-    let urlResult;
+  // Phase 1: Scrape all URLs
+  const scrapeTasks = urls.map((url) => async () => {
     try {
       console.log('1. Starting Firecrawl:', Date.now());
       const markdown = await scrapeWithRetry(url, firecrawlKey);
       console.log('2. Firecrawl done:', Date.now());
-
-      const data = await extractSchema(markdown, prompt, nemotronKey, outFormat);
-      console.log('3. Claude done:', Date.now());
-
-      urlResult = { url, data, success: true };
-      results.push({ url, data });
+      return { url, markdown, success: true };
     } catch (error) {
-      console.log('Task execution failed:', error.message);
-      urlResult = { url, reason: error.message || String(error), success: false };
-      failed.push({ url, reason: urlResult.reason });
+      console.log('Scrape failed:', error.message);
+      return { url, reason: error.message || String(error), success: false };
     }
+  });
 
+  const scrapeResults = await runWithConcurrencyLimit(scrapeTasks, 5);
+
+  // Separate successes and failures from scraping
+  const scrapedOk = [];
+  for (const sr of scrapeResults) {
+    if (sr.success) {
+      scrapedOk.push(sr);
+      scrapedMarkdowns.push({ url: sr.url, markdown: sr.markdown });
+    } else {
+      failed.push({ url: sr.url, reason: sr.reason });
+    }
     completedCount++;
-
-    // Send progress event
     res.write(`data: ${JSON.stringify({
       type: "progress",
       completed: completedCount,
       total: urls.length,
-      current_url: url,
-      result: urlResult
+      phase: "scraping",
+      current_url: sr.url,
+      result: { url: sr.url, success: sr.success }
+    })}\n\n`);
+  }
+
+  // Phase 2: Extract with AI
+  if (compareMode && scrapedOk.length > 0) {
+    // COMPARE MODE: Combine all scraped content into one prompt
+    res.write(`data: ${JSON.stringify({
+      type: "progress",
+      completed: completedCount,
+      total: urls.length,
+      phase: "analyzing",
+      current_url: "Combining all content for comparison...",
+      result: { url: "compare", success: true }
     })}\n\n`);
 
-    return urlResult;
-  });
+    const combinedMarkdown = scrapedMarkdowns.map((s, i) =>
+      `--- SOURCE ${i + 1}: ${s.url} ---\n${s.markdown}`
+    ).join('\n\n');
 
-  // Execute tasks with a concurrency limit of 5
-  await runWithConcurrencyLimit(tasks, 5);
+    try {
+      const data = await extractSchema(combinedMarkdown, prompt, nemotronKey, outFormat);
+      console.log('3. Compare extraction done:', Date.now());
+      results.push({ url: 'combined-comparison', sources: scrapedMarkdowns.map(s => s.url), data });
+    } catch (error) {
+      console.log('Compare extraction failed:', error.message);
+      failed.push({ url: 'combined-comparison', reason: error.message || String(error) });
+    }
+  } else {
+    // NORMAL MODE: Extract each URL independently
+    for (const sr of scrapedOk) {
+      try {
+        const data = await extractSchema(sr.markdown, prompt, nemotronKey, outFormat);
+        console.log('3. Extraction done:', Date.now());
+        results.push({ url: sr.url, data });
+      } catch (error) {
+        console.log('Extraction failed:', error.message);
+        failed.push({ url: sr.url, reason: error.message || String(error) });
+      }
+    }
+  }
 
   const output = {
     state_id: stateId,
     format: outFormat,
+    compare: compareMode,
     results,
     failed,
     total: urls.length,
