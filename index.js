@@ -40,24 +40,146 @@ body {
 h1 {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
-  font-size: 32px;
   color: #F8F8FF;
   letter-spacing: -0.5px;
+  font-size: 48px;
+  line-height: 1.1;
+  margin-bottom: 16px;
 }
 
-p.sub {
-  font-family: 'Inter', sans-serif;
-  color: #6B7280;
-  font-size: 14px;
-  margin-top: 6px;
+.hero {
+  text-align: center;
+  padding: 48px 0 40px;
+}
+
+.badge {
+  display: inline-block;
+  border: 1px solid #6366F1;
+  color: #818CF8;
+  font-size: 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  padding: 6px 14px;
   margin-bottom: 24px;
+  letter-spacing: 0.5px;
 }
 
-.divider {
-  height: 1px;
-  background-color: #6366F1;
-  opacity: 0.3;
-  margin-bottom: 32px;
+.gradient-text {
+  background: linear-gradient(
+    135deg, #6366F1, #818CF8
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  color: #9CA3AF;
+  font-size: 16px;
+  max-width: 480px;
+  margin: 0 auto 28px;
+  line-height: 1.6;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+
+.stat {
+  background: #13131A;
+  border: 1px solid #1E1E2E;
+  color: #9CA3AF;
+  font-size: 13px;
+  padding: 8px 16px;
+  font-family: 'Inter', sans-serif;
+}
+
+.how-it-works {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #13131A;
+  border: 1px solid #1E1E2E;
+  padding: 16px 20px;
+}
+
+.step-num {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #6366F1;
+}
+
+.step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.step-text strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  color: #F8F8FF;
+}
+
+.step-text span {
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.step-arrow {
+  color: #6366F1;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.card-hint {
+  font-size: 12px;
+  color: #6B7280;
+  margin-bottom: 12px;
+  font-family: 'Inter', sans-serif;
+}
+
+.examples {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.example-label {
+  font-size: 12px;
+  color: #6B7280;
+  font-family: 'Inter', sans-serif;
+}
+
+.example-btn {
+  background: #0A0A0F;
+  border: 1px solid #1E1E2E;
+  color: #9CA3AF;
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s;
+}
+
+.example-btn:hover {
+  border-color: #6366F1;
+  color: #F8F8FF;
 }
 
 .card {
@@ -357,30 +479,133 @@ td {
 }
 
 footer {
-  text-align: center;
-  margin-top: 40px;
-  padding-top: 20px;
+  margin-top: 60px;
+  padding: 24px 0;
   border-top: 1px solid #1E1E2E;
-  font-size: 12px;
-  color: #6B7280;
-  font-family: 'Inter', sans-serif;
 }
 
-footer a {
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.footer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.footer-right a {
   color: #6366F1;
   text-decoration: none;
+}
+
+.footer-right a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  h1 { font-size: 32px; }
+  
+  .how-it-works { 
+    flex-direction: column;
+  }
+  
+  .step-arrow { 
+    transform: rotate(90deg);
+  }
+  
+  .stats-row {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .options-row {
+    flex-direction: column;
+  }
 }
 </style>
 </head>
 <body>
-  <h1>Nexus AI</h1>
-  <p class="sub">The execution layer for autonomous AI agents.</p>
-  <div class="divider"></div>
+  <div class="hero">
+    <!-- Animated badge above title -->
+    <div class="badge">
+      ⚡ Built for AI Agents & Developers
+    </div>
+    
+    <!-- Main headline -->
+    <h1>Scrape Any Website<br>
+    <span class="gradient-text">
+    With Plain English
+    </span></h1>
+    
+    <!-- Subheadline -->
+    <p class="hero-sub">
+    No JSON schemas. No pipeline crashes. 
+    No hidden costs. Just paste URLs and 
+    tell us what you want.
+    </p>
+    
+    <!-- 3 stat pills -->
+    <div class="stats-row">
+      <div class="stat">⚡ 5 URLs in parallel</div>
+      <div class="stat">🔄 Auto-retry on failures</div>
+      <div class="stat">🎯 Plain English prompts</div>
+    </div>
+  </div>
+
+  <div class="how-it-works">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-text">
+        <strong>Paste URLs</strong>
+        <span>Up to 5 websites at once</span>
+      </div>
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-text">
+        <strong>Describe in English</strong>
+        <span>Tell us what to extract</span>
+      </div>
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-text">
+        <strong>Get Results</strong>
+        <span>Clean JSON or plain text</span>
+      </div>
+    </div>
+  </div>
 
   <form id="scrapeForm">
     <!-- Card 1: Target URLs -->
     <div class="card">
-      <label for="urls">Target URLs</label>
+      <label>Target URLs</label>
+      <p class="card-hint">
+      One URL per line. 
+      We scrape all of them in parallel.
+      </p>
       <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
       <div class="url-hint">Free tier: 5 URLs per request. Need more? <a href="mailto:patilharsh310708@gmail.com">Contact us</a>.</div>
       <div id="limitError"></div>
@@ -388,8 +613,32 @@ footer a {
 
     <!-- Card 2: Extraction Instructions -->
     <div class="card">
-      <label for="prompt">Extraction Instructions</label>
+      <label>What do you want to extract?</label>
+      <p class="card-hint">
+      Write in plain English. 
+      Example: "Extract company name, 
+      pricing plans, and contact email"
+      </p>
       <textarea id="prompt" rows="4" placeholder="Extract the company name, email, and pricing from each page"></textarea>
+      
+      <!-- Examples -->
+      <div class="examples">
+        <span class="example-label">
+          Try an example:
+        </span>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract company name, pricing, and contact email')">
+          💼 Company Info
+        </button>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract the main product features and pricing tiers')">
+          🛍️ Product Details
+        </button>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract the job title, requirements, and salary range')">
+          💼 Job Listings
+        </button>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract the article title, author, date, and key summary')">
+          📰 News Articles
+        </button>
+      </div>
     </div>
 
     <!-- Option row -->
@@ -442,10 +691,32 @@ footer a {
   </div>
 
   <footer>
-    Free tier: 5 URLs max &middot; Need more? <a href="mailto:patilharsh310708@gmail.com">patilharsh310708@gmail.com</a>
+    <div class="footer-content">
+      <div class="footer-left">
+        <strong style="font-family:'Space Grotesk', sans-serif; color:#F8F8FF">
+          Nexus AI
+        </strong>
+        <span>The execution layer for autonomous AI agents</span>
+      </div>
+      <div class="footer-right">
+        <span>Free tier: 5 URLs max</span>
+        <span>·</span>
+        <a href="mailto:patilharsh310708@gmail.com">
+          Unlock more →
+        </a>
+        <span>·</span>
+        <a href="https://github.com/Harshpatil77/Nexus-AI" target="_blank">
+          ⭐ GitHub
+        </a>
+      </div>
+    </div>
   </footer>
 
 <script>
+function setPrompt(text) {
+  document.getElementById('prompt').value = text;
+}
+
 // JSON syntax highlighter
 function syntaxHighlightJson(jsonObj) {
   let json = JSON.stringify(jsonObj, null, 2);
