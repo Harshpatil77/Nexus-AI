@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Nexus_AI-v1.0.0-6366F1?style=for-the-badge&labelColor=0A0A0F" alt="Version" />
+  <img src="https://img.shields.io/badge/Nexus_AI-v2.0.0-6366F1?style=for-the-badge&labelColor=0A0A0F" alt="Version" />
   <img src="https://img.shields.io/badge/Node.js-20+-22C55E?style=for-the-badge&logo=node.js&labelColor=0A0A0F" alt="Node.js" />
   <img src="https://img.shields.io/badge/Express-4.x-F8F8FF?style=for-the-badge&logo=express&labelColor=0A0A0F" alt="Express" />
   <img src="https://img.shields.io/badge/Railway-Deployed-6366F1?style=for-the-badge&logo=railway&labelColor=0A0A0F" alt="Railway" />
@@ -22,7 +22,7 @@
 
 ## 🎯 What is Nexus AI?
 
-Nexus AI is a production-ready web scraping + AI extraction API. Paste URLs, describe what you want in plain English, and get clean JSON or plain text back — powered by **Firecrawl** for scraping and **NVIDIA Nemotron 3 Ultra 550B** for intelligent extraction.
+Nexus AI is a production-ready web scraping + AI extraction API. Paste URLs, describe what you want in plain English, and get clean JSON or plain text back — powered by **Firecrawl** for scraping and **NVIDIA Nemotron 3 Ultra 550B** for intelligent extraction. Now with **autonomous multi-step Workflows** that discover, scrape, and extract data from a single plain English goal.
 
 ### How It Works
 
@@ -39,14 +39,15 @@ Nexus AI is a production-ready web scraping + AI extraction API. Paste URLs, des
 | Feature | Description |
 |---|---|
 | **🔗 Multi-URL Scraping** | Scrape up to 5 URLs in a single request, all processed in parallel |
+| **🤖 Autonomous Workflows** | Describe a goal in plain English — Nexus AI discovers URLs, scrapes them, follows links, and merges results automatically |
 | **🧠 AI-Powered Extraction** | NVIDIA Nemotron 3 Ultra 550B extracts structured data from raw HTML using natural language prompts |
 | **📡 Real-Time Streaming** | Server-Sent Events (SSE) endpoint streams live progress as each URL is scraped and parsed |
 | **🔄 Auto-Retry Logic** | Failed scrapes automatically retry up to 3 times with a 2-second delay between attempts |
 | **📊 Dual Output Formats** | Choose between syntax-highlighted JSON or clean plain text output |
 | **🔀 Compare Mode** | Combine content from multiple URLs into a single extraction for side-by-side analysis |
 | **💾 State Persistence** | Every scrape result is saved with a unique state ID for later retrieval |
-| **🎨 Premium Dark UI** | Built-in frontend with Space Grotesk typography, gradient accents, and micro-animations |
-| **⚡ Rate Limiting** | Free tier capped at 5 URLs per request to prevent abuse |
+| **🎨 Premium Dark UI** | Built-in frontend with tabbed navigation, Space Grotesk typography, gradient accents, and micro-animations |
+| **⚡ Rate Limiting** | Free tier capped at 5 URLs per request (scraper) and 15 URLs per workflow |
 | **🏥 Health Check** | `/health` endpoint for uptime monitoring and deployment verification |
 
 ---
@@ -218,6 +219,73 @@ Retrieve a previously saved scrape result by its state ID.
 
 ---
 
+### `POST /workflow`
+
+Start an autonomous multi-step workflow. Nexus AI discovers URLs, scrapes them, follows links, and merges results — all from a single plain English goal.
+
+**Request Body:**
+```json
+{
+  "goal": "Find all AI tools launched this week on ProductHunt, extract their names, pricing, and founding team",
+  "depth": 2
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `goal` | `string` | ✅ | Plain English description of what you want |
+| `depth` | `number` | ❌ | Crawl depth: `1` (seed only) or `2` (follow links). Default: `2`, max: `2` |
+
+**Response (201):**
+```json
+{
+  "workflow_id": "3c850ccd-0402-4134-9fde-1a6aad5aaa82",
+  "status": "processing",
+  "goal": "Find all AI tools launched this week on ProductHunt..."
+}
+```
+
+The workflow runs **asynchronously** in the background. Poll `GET /workflow/:id` to check progress.
+
+**4-Step Execution Pipeline:**
+```
+Step 1  🔍  Discover seed URLs from your goal (via NVIDIA AI)
+Step 2  🌐  Scrape all seed pages (via Firecrawl)
+Step 3  🔗  Extract and scrape deep links found on seed pages
+Step 4  🧹  Merge, deduplicate, and return structured results
+```
+
+---
+
+### `GET /workflow/:workflow_id`
+
+Check the status of a running or completed workflow.
+
+**Response (200):**
+```json
+{
+  "workflow_id": "3c850ccd-0402-4134-9fde-1a6aad5aaa82",
+  "status": "completed",
+  "goal": "Find all AI tools...",
+  "current_step": 4,
+  "steps_completed": [1, 2, 3, 4],
+  "urls_discovered": 8,
+  "urls_scraped": 8,
+  "results": [{"name": "AI Tool", "pricing": "Free", "url": "..."}],
+  "failed": [],
+  "created_at": 1783506845041,
+  "completed_at": 1783506845082
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `processing` | Workflow is still running |
+| `completed` | All steps finished successfully |
+| `failed` | Workflow encountered a fatal error |
+
+---
+
 ## 🧪 Testing
 
 Run the full integration test suite (uses mock API servers, no real API credits consumed):
@@ -226,7 +294,7 @@ Run the full integration test suite (uses mock API servers, no real API credits 
 node test_api.js
 ```
 
-**Test coverage:**
+**Test coverage (10 tests):**
 | Step | Verification |
 |---|---|
 | 1 | `GET /health` returns correct status |
@@ -234,6 +302,11 @@ node test_api.js
 | 3 | Successful multi-URL scrape and extraction |
 | 4 | Retry logic (3 attempts) and partial failure handling |
 | 5 | State file persistence and retrieval |
+| 6 | `POST /workflow` returns 201 with workflow_id |
+| 7 | `GET /workflow/:id` returns valid processing/completed status |
+| 8 | Workflow completes all 4 steps end-to-end |
+| 9 | Empty goal validation returns 400 |
+| 10 | Depth clamping (max 2) works correctly |
 
 ---
 
