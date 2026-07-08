@@ -910,16 +910,26 @@ footer {
       <textarea id="wfGoal" rows="4" placeholder="Find all AI tools launched this week on ProductHunt, extract their names, pricing, and founding team"></textarea>
     </div>
 
-    <!-- Workflow Form: Depth -->
-    <div class="card">
-      <label>Crawl Depth</label>
-      <p class="card-hint">
-        How deep should Nexus AI follow links? Depth 1 = seed pages only. Depth 2 = follow links found on seed pages.
-      </p>
-      <select id="wfDepth" class="depth-select">
-        <option value="1">Depth 1 — Seed pages only</option>
-        <option value="2" selected>Depth 2 — Follow discovered links</option>
-      </select>
+    <!-- Workflow Form: Depth & Format Options -->
+    <div class="options-row" style="margin-bottom: 24px;">
+      <div>
+        <label>Crawl Depth</label>
+        <select id="wfDepth" class="depth-select" style="min-width: 220px;">
+          <option value="1">Depth 1 — Seed pages only</option>
+          <option value="2" selected>Depth 2 — Follow discovered links</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Output Format</label>
+        <div class="pill-group">
+          <input type="radio" id="wf-format-json" name="wfformat" value="json" checked>
+          <label for="wf-format-json">JSON</label>
+          
+          <input type="radio" id="wf-format-text" name="wfformat" value="text">
+          <label for="wf-format-text">Plain Text</label>
+        </div>
+      </div>
     </div>
 
     <!-- Run Workflow Button -->
@@ -1319,11 +1329,13 @@ async function runWorkflow() {
   document.getElementById('wfUrlsDiscovered').textContent = 'URLs discovered: 0';
   document.getElementById('wfUrlsScraped').textContent = 'URLs scraped: 0';
 
+  var format = document.querySelector('input[name="wfformat"]:checked').value;
+
   try {
     var res = await fetch('/workflow', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal: goal, depth: depth })
+      body: JSON.stringify({ goal: goal, depth: depth, format: format })
     });
 
     if (!res.ok) {
@@ -1416,7 +1428,20 @@ function showWorkflowResults(data) {
     (data.urls_scraped || 0) + ' URLs scraped, ' +
     (data.results ? data.results.length : 0) + ' results extracted';
 
-  document.getElementById('wfResultOutput').innerHTML = syntaxHighlightJson(data);
+  var outputEl = document.getElementById('wfResultOutput');
+  if (data.format === 'text') {
+    outputEl.style.fontFamily = "'Inter', sans-serif";
+    outputEl.style.lineHeight = "1.6";
+    var compiledText = '';
+    (data.results || []).forEach(function(r) {
+      compiledText += '### URL: ' + r.url + '\n\n' + r.text + '\n\n---\n\n';
+    });
+    outputEl.innerHTML = markdownToHtml(compiledText.trim());
+  } else {
+    outputEl.style.fontFamily = "'JetBrains Mono', monospace";
+    outputEl.style.lineHeight = "1.5";
+    outputEl.innerHTML = syntaxHighlightJson(data);
+  }
 }
 
 function downloadWorkflowJson() {
@@ -1889,7 +1914,7 @@ async function saveWorkflowState(workflow) {
 
 // POST /workflow endpoint
 app.post('/workflow', async (req, res) => {
-  let { goal, depth } = req.body;
+  let { goal, depth, format } = req.body;
 
   if (!goal || typeof goal !== 'string' || goal.trim() === '') {
     return res.status(400).json({ error: 'goal must be a non-empty string' });
@@ -1900,6 +1925,9 @@ app.post('/workflow', async (req, res) => {
   if (isNaN(targetDepth) || targetDepth < 1 || targetDepth > 2) {
     targetDepth = 2;
   }
+
+  // format defaults to json
+  const targetFormat = (format === 'text') ? 'text' : 'json';
 
   const firecrawlKey = process.env.FIRECRAWL_API_KEY;
   const nemotronKey = process.env.NVIDIA_API_KEY || process.env.ANTHROPIC_API_KEY;
@@ -1913,6 +1941,7 @@ app.post('/workflow', async (req, res) => {
     workflow_id: workflowId,
     status: 'processing',
     goal: goal,
+    format: targetFormat,
     current_step: 1,
     steps_completed: [],
     urls_discovered: 0,
@@ -2033,9 +2062,15 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
       try {
         const markdown = await scrapeWithRetry(url, firecrawlKey);
         // Extract matching content schema from deep page matching user's original goal
-        const extractionPrompt = `Extract information matching this goal: "${workflow.goal}".
-Return ONLY a valid JSON object or JSON array containing the extracted structured data. No additional explanations.`;
-        const data = await extractSchema(markdown, extractionPrompt, nemotronKey, 'json');
+        let extractionPrompt, formatType;
+        if (workflow.format === 'text') {
+          extractionPrompt = `Extract information matching this goal: "${workflow.goal}".\nReturn the answer as clean, readable plain text. No additional explanations.`;
+          formatType = 'text';
+        } else {
+          extractionPrompt = `Extract information matching this goal: "${workflow.goal}".\nReturn ONLY a valid JSON object or JSON array containing the extracted structured data. No additional explanations.`;
+          formatType = 'json';
+        }
+        const data = await extractSchema(markdown, extractionPrompt, nemotronKey, formatType);
         return { url, success: true, data };
       } catch (err) {
         return { url, success: false, reason: err.message || String(err) };
@@ -2048,10 +2083,14 @@ Return ONLY a valid JSON object or JSON array containing the extracted structure
     for (const r of deepScrapeResults) {
       if (r.success) {
         workflow.urls_scraped++;
-        if (Array.isArray(r.data)) {
-          r.data.forEach(item => rawResults.push(item));
-        } else if (r.data && typeof r.data === 'object') {
-          rawResults.push(r.data);
+        if (workflow.format === 'text') {
+          rawResults.push({ url: r.url, text: r.data });
+        } else {
+          if (Array.isArray(r.data)) {
+            r.data.forEach(item => rawResults.push(item));
+          } else if (r.data && typeof r.data === 'object') {
+            rawResults.push(r.data);
+          }
         }
       } else {
         workflow.failed.push({ url: r.url, step: 3, reason: r.reason });
@@ -2065,17 +2104,22 @@ Return ONLY a valid JSON object or JSON array containing the extracted structure
     workflow.current_step = 4;
     await saveWorkflowState(workflow);
 
-    // Deduplicate logic: serialize each object, use unique set, filter duplicates
-    const uniqueMap = new Map();
-    rawResults.forEach(item => {
-      // Find a key to deduplicate. If name/title/url exists, use that, otherwise use JSON.stringify
-      const key = item.name || item.title || item.url || JSON.stringify(item);
-      if (!uniqueMap.has(key)) {
-        uniqueMap.set(key, item);
-      }
-    });
+    if (workflow.format === 'text') {
+      // For text format, we don't deduplicate json fields. We just compile the text content.
+      workflow.results = rawResults;
+    } else {
+      // Deduplicate logic: serialize each object, use unique set, filter duplicates
+      const uniqueMap = new Map();
+      rawResults.forEach(item => {
+        // Find a key to deduplicate. If name/title/url exists, use that, otherwise use JSON.stringify
+        const key = item.name || item.title || item.url || JSON.stringify(item);
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, item);
+        }
+      });
+      workflow.results = Array.from(uniqueMap.values());
+    }
 
-    workflow.results = Array.from(uniqueMap.values());
     workflow.steps_completed.push(4);
     workflow.status = 'completed';
     workflow.completed_at = Date.now();
