@@ -47,7 +47,7 @@ Nexus AI is a production-ready web scraping + AI extraction API. Paste URLs, des
 | **🔀 Compare Mode** | Combine content from multiple URLs into a single extraction for side-by-side analysis |
 | **💾 State Persistence** | Every scrape result is saved with a unique state ID for later retrieval |
 | **🎨 Premium Dark UI** | Built-in frontend with tabbed navigation, Space Grotesk typography, gradient accents, and micro-animations |
-| **⚡ Rate Limiting** | Free tier capped at 5 URLs per request (scraper) and 15 URLs per workflow |
+| **⚡ Rate Limiting** | Free tier capped at 5 URLs per request (scraper) and 8 URLs per workflow |
 | **🏥 Health Check** | `/health` endpoint for uptime monitoring and deployment verification |
 
 ---

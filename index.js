@@ -2021,9 +2021,9 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
     workflow.current_step = 3;
     await saveWorkflowState(workflow);
 
-    // Filter to make sure total URLs scraped across the entire workflow does not exceed 15.
+    // Filter to make sure total URLs scraped across the entire workflow does not exceed 8.
     // We already scraped successfulSeedCount URLs.
-    const remainingUrlQuota = Math.max(0, 15 - workflow.urls_scraped);
+    const remainingUrlQuota = Math.max(0, 8 - workflow.urls_scraped);
     const deepLinksToScrape = allDeepLinks.slice(0, remainingUrlQuota);
 
     workflow.urls_discovered = seedUrls.length + allDeepLinks.length;
