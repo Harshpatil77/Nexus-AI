@@ -1434,7 +1434,7 @@ function showWorkflowResults(data) {
     outputEl.style.lineHeight = "1.6";
     var compiledText = '';
     (data.results || []).forEach(function(r) {
-      compiledText += '### URL: ' + r.url + '\n\n' + r.text + '\n\n---\n\n';
+      compiledText += '### URL: ' + r.url + '\\n\\n' + r.text + '\\n\\n---\\n\\n';
     });
     outputEl.innerHTML = markdownToHtml(compiledText.trim());
   } else {
