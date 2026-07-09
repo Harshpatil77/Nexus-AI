@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus AI</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="hero">
+    <!-- Animated badge above title -->
+    <div class="badge">
+      ⚡ Built for AI Agents & Developers
+    </div>
+    
+    <!-- Main headline -->
+    <h1>Scrape Any Website<br>
+    <span class="gradient-text">
+    With Plain English
+    </span></h1>
+    
+    <!-- Subheadline -->
+    <p class="hero-sub">
+    No JSON schemas. No pipeline crashes. 
+    No hidden costs. Just paste URLs and 
+    tell us what you want.
+    </p>
+    
+    <!-- 3 stat pills -->
+    <div class="stats-row">
+      <div class="stat">⚡ 5 URLs in parallel</div>
+      <div class="stat">🔄 Auto-retry on failures</div>
+      <div class="stat">🎯 Plain English prompts</div>
+    </div>
+  </div>
+
+  <div class="how-it-works">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-text">
+        <strong>Paste URLs</strong>
+        <span>Up to 5 websites at once</span>
+      </div>
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-text">
+        <strong>Describe in English</strong>
+        <span>Tell us what to extract</span>
+      </div>
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-text">
+        <strong>Get Results</strong>
+        <span>Clean JSON or plain text</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="scraper" onclick="switchTab('scraper')">🔍 Scraper</button>
+    <button class="tab-btn" data-tab="workflow" onclick="switchTab('workflow')">🤖 Workflow</button>
+  </div>
+
+  <div id="scraperTab" class="tab-content active">
+  <form id="scrapeForm">
+    <!-- Card 1: Target URLs -->
+    <div class="card">
+      <label>Target URLs</label>
+      <p class="card-hint">
+      One URL per line. 
+      We scrape all of them in parallel.
+      </p>
+      <textarea id="urls" rows="5" placeholder="https://example.com&#10;https://example2.com"></textarea>
+      <div class="url-hint">Free tier: 5 URLs per request. Need more? <a href="mailto:patilharsh310708@gmail.com">Contact us</a>.</div>
+      <div id="limitError"></div>
+    </div>
+
+    <!-- Card 2: Extraction Instructions -->
+    <div class="card">
+      <label>What do you want to extract?</label>
+      <p class="card-hint">
+      Write in plain English. 
+      Example: "Extract company name, 
+      pricing plans, and contact email"
+      </p>
+      <textarea id="prompt" rows="4" placeholder="Extract the company name, email, and pricing from each page"></textarea>
+      
+      <!-- Examples -->
+      <div class="examples">
+        <span class="example-label">
+          Try an example:
+        </span>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract company name, pricing, and contact email')">
+          💼 Company Info
+        </button>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract the main product features and pricing tiers')">
+          🛍️ Product Details
+        </button>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract the job title, requirements, and salary range')">
+          💼 Job Listings
+        </button>
+        <button type="button" class="example-btn" onclick="setPrompt('Extract the article title, author, date, and key summary')">
+          📰 News Articles
+        </button>
+      </div>
+    </div>
+
+    <!-- Option row -->
+    <div class="options-row">
+      <!-- Pill Toggles for Format -->
+      <div>
+        <label>Output Format</label>
+        <div class="pill-group">
+          <input type="radio" id="format-json" name="format" value="json">
+          <label for="format-json">JSON</label>
+          
+          <input type="radio" id="format-text" name="format" value="text" checked>
+          <label for="format-text">Plain Text</label>
+        </div>
+      </div>
+
+      <!-- Compare Mode -->
+      <label class="checkbox-container" style="margin-top: 24px;">
+        <input type="checkbox" id="compareMode">
+        <span class="checkbox-custom"></span>
+        <span>Compare Mode</span>
+        <span style="color: #6B7280; font-size: 11px;">(combine content)</span>
+      </label>
+    </div>
+
+    <!-- Run Scrape Wrapper -->
+    <div class="btn-wrapper">
+      <button type="submit" id="submitBtn">Run Scrape</button>
+    </div>
+  </form>
+
+  <!-- Progress Card -->
+  <div id="progressCard">
+    <div id="status">Connecting to stream...</div>
+    <div id="progressContainer">
+      <div id="progressBar"></div>
+    </div>
+    <div id="urlList"></div>
+  </div>
+
+  <!-- Output Cards -->
+  <div id="jsonOutputCard" class="output-card">
+    <label>Extracted JSON Output</label>
+    <pre id="output"></pre>
+  </div>
+
+  <div id="textOutputCard" class="output-card">
+    <label>Extracted Plain Text Output</label>
+    <pre id="outputText" style="font-family: 'Inter', sans-serif; line-height: 1.6;"></pre>
+  </div>
+  </div><!-- end scraperTab -->
+
+  <div id="workflowTab" class="tab-content">
+    <!-- Workflow Form: Goal -->
+    <div class="card">
+      <label>Your Goal</label>
+      <p class="card-hint">
+        Describe what you want in plain English. Nexus AI will autonomously discover URLs, scrape them, and extract structured data.
+      </p>
+      <textarea id="wfGoal" rows="4" placeholder="Find all AI tools launched this week on ProductHunt, extract their names, pricing, and founding team"></textarea>
+    </div>
+
+    <!-- Workflow Form: Depth & Format Options -->
+    <div class="options-row" style="margin-bottom: 24px;">
+      <div>
+        <label>Crawl Depth</label>
+        <select id="wfDepth" class="depth-select" style="min-width: 220px;">
+          <option value="1">Depth 1 — Seed pages only</option>
+          <option value="2" selected>Depth 2 — Follow discovered links</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Output Format</label>
+        <div class="pill-group">
+          <input type="radio" id="wf-format-json" name="wfformat" value="json" checked>
+          <label for="wf-format-json">JSON</label>
+          
+          <input type="radio" id="wf-format-text" name="wfformat" value="text">
+          <label for="wf-format-text">Plain Text</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Run Workflow Button -->
+    <div class="btn-wrapper">
+      <button type="button" id="wfSubmitBtn" class="wf-submit-btn" onclick="runWorkflow()">⚡ Run Workflow</button>
+    </div>
+
+    <!-- Workflow Progress -->
+    <div id="wfProgressCard" class="card" style="display:none; margin-top: 24px;">
+      <label>Workflow Progress</label>
+      <div id="wfSteps" class="workflow-steps">
+        <div class="wf-step" id="wfStep1">
+          <span class="wf-step-icon">🔍</span>
+          <div class="wf-step-info">
+            <strong>Step 1: Discovering seed URLs</strong>
+            <span class="wf-step-desc">Converting your goal into starting URLs</span>
+          </div>
+          <span class="wf-step-status" id="wfStep1Status"></span>
+        </div>
+        <div class="wf-step" id="wfStep2">
+          <span class="wf-step-icon">🌐</span>
+          <div class="wf-step-info">
+            <strong>Step 2: Scraping seed pages</strong>
+            <span class="wf-step-desc">Extracting content from discovered URLs</span>
+          </div>
+          <span class="wf-step-status" id="wfStep2Status"></span>
+        </div>
+        <div class="wf-step" id="wfStep3">
+          <span class="wf-step-icon">🔗</span>
+          <div class="wf-step-info">
+            <strong>Step 3: Deep link scraping</strong>
+            <span class="wf-step-desc">Following and scraping linked pages</span>
+          </div>
+          <span class="wf-step-status" id="wfStep3Status"></span>
+        </div>
+        <div class="wf-step" id="wfStep4">
+          <span class="wf-step-icon">🧹</span>
+          <div class="wf-step-info">
+            <strong>Step 4: Merge & Deduplicate</strong>
+            <span class="wf-step-desc">Combining and cleaning all results</span>
+          </div>
+          <span class="wf-step-status" id="wfStep4Status"></span>
+        </div>
+      </div>
+
+      <div id="wfStats" class="wf-stats" style="display:none;">
+        <span id="wfUrlsDiscovered">URLs discovered: 0</span>
+        <span id="wfUrlsScraped">URLs scraped: 0</span>
+      </div>
+    </div>
+
+    <!-- Workflow Results -->
+    <div id="wfResultCard" class="output-card" style="display:none;">
+      <label>Workflow Results</label>
+      <div id="wfResultSummary" class="wf-result-summary"></div>
+      <pre id="wfResultOutput"></pre>
+      <button type="button" id="wfDownloadBtn" class="wf-download-btn" onclick="downloadWorkflowJson()">
+        ⬇ Download as JSON
+      </button>
+    </div>
+
+    <!-- Workflow Error -->
+    <div id="wfErrorCard" class="output-card" style="display:none; border-color: #EF4444;">
+      <label style="color: #EF4444;">Workflow Failed</label>
+      <pre id="wfErrorOutput" style="color: #EF4444;"></pre>
+    </div>
+  </div><!-- end workflowTab -->
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-left">
+        <strong style="font-family:'Space Grotesk', sans-serif; color:#F8F8FF">
+          Nexus AI
+        </strong>
+        <span>The execution layer for autonomous AI agents</span>
+      </div>
+      <div class="footer-right">
+        <span>Free tier: 5 URLs max</span>
+        <span>·</span>
+        <a href="mailto:patilharsh310708@gmail.com">
+          Unlock more →
+        </a>
+        <span>·</span>
+        <a href="https://github.com/Harshpatil77/Nexus-AI" target="_blank">
+          ⭐ GitHub
+        </a>
+      </div>
+    </div>
+  </footer>
+
+<script src="app.js"></script>
+</body>
+</html>
