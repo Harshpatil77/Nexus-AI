@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus AI — Founder Analytics</title>
+  <link rel="stylesheet" href="admin.css">
+  <!-- Chart.js CDN for visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <!-- Dashboard container -->
+  <div class="dashboard-container">
+    <header class="db-header">
+      <div class="logo-area">
+        <span class="pulse-dot"></span>
+        <h1>Nexus AI <span class="badge-text">Founder Panel</span></h1>
+      </div>
+      <p class="subtitle">Product Learning & YC Application Metrics Suite</p>
+    </header>
+
+    <!-- Overview Stats Row -->
+    <div class="metrics-grid">
+      <div class="glass-card metric-card">
+        <span class="card-label">Total Unique Users</span>
+        <h2 id="metricUsers" class="metric-value">—</h2>
+        <p class="card-subtext" id="metricDAU">DAU: — | WAU: —</p>
+      </div>
+      <div class="glass-card metric-card">
+        <span class="card-label">Workflow Success Rate</span>
+        <h2 id="metricSuccess" class="metric-value">—</h2>
+        <p class="card-subtext" id="metricSuccessCount">Started: — | Success: —</p>
+      </div>
+      <div class="glass-card metric-card">
+        <span class="card-label">Avg Workflow Duration</span>
+        <h2 id="metricDuration" class="metric-value">—</h2>
+        <p class="card-subtext" id="metricUrlsDiscovered">Avg Scrapes: — URLs</p>
+      </div>
+      <div class="glass-card metric-card">
+        <span class="card-label">Returning User Rate</span>
+        <h2 id="metricReturning" class="metric-value">—</h2>
+        <p class="card-subtext" id="metricAvgSession">Avg Session: —s</p>
+      </div>
+    </div>
+
+    <!-- Main Content Area: Charts & Insights -->
+    <div class="dashboard-grid">
+      <!-- Left side: Charts -->
+      <div class="grid-col-8">
+        <!-- Daily Activity Chart -->
+        <div class="glass-card chart-card">
+          <h3>Daily Platform Activity</h3>
+          <p class="card-hint">Visits, Scrapes, and Workflows over time</p>
+          <div class="chart-container">
+            <canvas id="dailyChart"></canvas>
+          </div>
+        </div>
+
+        <div class="two-column-grid">
+          <!-- Workflow Success Doughnut -->
+          <div class="glass-card chart-card">
+            <h3>Workflow Success Rate</h3>
+            <div class="chart-container-small">
+              <canvas id="successChart"></canvas>
+            </div>
+          </div>
+          <!-- Error Breakdown Bar Chart -->
+          <div class="glass-card chart-card">
+            <h3>Error Breakdown</h3>
+            <div class="chart-container-small">
+              <canvas id="errorChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Founder YC Report Card -->
+        <div class="glass-card report-card">
+          <div class="report-header">
+            <h3>Y Combinator Metrics Summary</h3>
+            <span class="yc-badge">YC Prep</span>
+          </div>
+          <div class="yc-metrics-grid">
+            <div class="yc-stat">
+              <span class="yc-label">Activation Rate</span>
+              <strong id="ycActivation">—</strong>
+              <p>Completed ≥1 workflow</p>
+            </div>
+            <div class="yc-stat">
+              <span class="yc-label">NPS Score</span>
+              <strong id="ycNPS">—</strong>
+              <p>Net Promoter Score</p>
+            </div>
+            <div class="yc-stat">
+              <span class="yc-label">Power Users</span>
+              <strong id="ycPowerUsers">—</strong>
+              <p>Ran ≥5 workflows</p>
+            </div>
+            <div class="yc-stat">
+              <span class="yc-label">Dev Satisfaction</span>
+              <strong id="ycSatisfaction">—</strong>
+              <p>Avg Rating (1-5)</p>
+            </div>
+          </div>
+          <div class="report-block">
+            <h4>Executive Report Summary (Copy to YC App)</h4>
+            <div class="yc-report-text" id="founderExecutiveSummary">Loading founder report...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right side: Insights & Lists -->
+      <div class="grid-col-4">
+        <!-- Auto Generated Insights -->
+        <div class="glass-card list-card glow-border">
+          <h3>Product Insights</h3>
+          <div class="insights-list" id="insightsList">
+            <p class="loading">Generating insights...</p>
+          </div>
+        </div>
+
+        <!-- Top Goals List -->
+        <div class="glass-card list-card">
+          <h3>Top Workflow Goals</h3>
+          <ul class="ranked-list" id="goalsList">
+            <li class="loading">Loading top goals...</li>
+          </ul>
+        </div>
+
+        <!-- Top Domains List -->
+        <div class="glass-card list-card">
+          <h3>Top Target Domains</h3>
+          <ul class="ranked-list" id="domainsList">
+            <li class="loading">Loading top domains...</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: Recent Feedback & Errors -->
+    <div class="dashboard-grid" style="margin-top: 24px;">
+      <div class="grid-col-6">
+        <div class="glass-card table-card">
+          <h3>Recent Customer Feedback</h3>
+          <div class="feedback-container" id="feedbackList">
+            <p class="loading">Loading feedback logs...</p>
+          </div>
+        </div>
+      </div>
+      <div class="grid-col-6">
+        <div class="glass-card table-card">
+          <h3>System Error Log</h3>
+          <div class="errors-container" id="errorsList">
+            <p class="loading">Loading system error lists...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="db-footer">
+      <p>Nexus AI Analytics Engine © 2026. Data persisted locally in JSON files.</p>
+    </footer>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

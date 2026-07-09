@@ -3,3 +3,7 @@ node_modules/
 # Ignore local state files (UUID v4 format: 8-4-4-4-12)
 *-*-*-*-*.json
 workflow_*.json
+analytics.json
+feedback.json
+users.json
+sessions.json

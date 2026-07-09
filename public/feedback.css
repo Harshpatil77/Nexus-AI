@@ -1,0 +1,270 @@
+/* Feedback Modal Container Overlay */
+.feedback-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(5, 5, 10, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.feedback-modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Glassmorphic Modal Window */
+.feedback-modal-window {
+  background: rgba(19, 19, 26, 0.95);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.15);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 460px;
+  padding: 32px;
+  position: relative;
+  transform: scale(0.9);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.feedback-modal-overlay.active .feedback-modal-window {
+  transform: scale(1);
+}
+
+/* Header & Close */
+.feedback-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: #6B7280;
+  font-size: 20px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.feedback-close-btn:hover {
+  color: #F8F8FF;
+}
+
+/* Slide Container */
+.feedback-slides-container {
+  overflow: hidden;
+  position: relative;
+  min-height: 260px;
+}
+
+.feedback-slide {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.feedback-slide.active {
+  display: flex;
+  animation: slide-in 0.25s forwards;
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Slide elements */
+.feedback-slide h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  color: #FFFFFF;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.feedback-slide p {
+  font-size: 13px;
+  color: #9CA3AF;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+/* Interactive elements */
+.thumbs-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.thumb-btn {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  width: 72px;
+  height: 72px;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.thumb-btn:hover {
+  border-color: #6366F1;
+  background: rgba(99, 102, 241, 0.1);
+  transform: translateY(-4px);
+}
+
+.thumb-btn.selected {
+  border-color: #6366F1;
+  background: #6366F1;
+}
+
+/* building segment option pills */
+.pills-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.pill-option {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #9CA3AF;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.pill-option:hover {
+  border-color: #6366F1;
+  color: #FFFFFF;
+}
+
+.pill-option.selected {
+  background: #6366F1;
+  border-color: #6366F1;
+  color: #FFFFFF;
+}
+
+/* text input fields */
+.feedback-textarea {
+  width: 100%;
+  background: #0A0A0F;
+  border: 1px solid #1E1E2E;
+  color: #F8F8FF;
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 12px;
+  resize: none;
+  outline: none;
+  margin-bottom: 16px;
+}
+
+.feedback-textarea:focus {
+  border-color: #6366F1;
+}
+
+/* Likelihood 1-5 rating buttons */
+.rating-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.rating-btn {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #9CA3AF;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.15s;
+}
+
+.rating-btn:hover {
+  border-color: #6366F1;
+  color: #FFFFFF;
+}
+
+.rating-btn.selected {
+  background: #6366F1;
+  border-color: #6366F1;
+  color: #FFFFFF;
+}
+
+/* Navigation buttons */
+.feedback-nav-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.feedback-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.feedback-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1E1E2E;
+}
+
+.feedback-dot.active {
+  background: #6366F1;
+}
+
+.feedback-next-btn {
+  background: #6366F1;
+  color: #FFFFFF;
+  border: none;
+  padding: 10px 24px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.feedback-next-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedback-skip-link {
+  color: #6B7280;
+  font-size: 12px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  text-decoration: underline;
+}
+
+.feedback-skip-link:hover {
+  color: #F8F8FF;
+}

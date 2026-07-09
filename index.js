@@ -5,7 +5,13 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 
+// Analytics System Imports
+import { analyticsMiddleware, trackEvent, analyticsRouter, ensureDataFiles } from './analytics/analytics.js';
+import feedbackRouter from './analytics/feedback.js';
+import dashboardRouter from './analytics/dashboard.js';
+
 dotenv.config();
+await ensureDataFiles();
 
 const app = express();
 app.use(express.json());
@@ -15,6 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Add static file serving BEFORE routes
 app.use(express.static('public'));
+app.use(analyticsMiddleware);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -82,6 +89,72 @@ async function scrapeWithRetry(url, apiKey, retries = 3, delayMs = 2000) {
     }
   }
   throw lastError || new Error(`Failed to scrape after ${retries} retries`);
+}
+
+// ═══════════════════════════════════
+// URL Discovery helper (for workflow Step 1)
+// Uses a GENERATION prompt, not an extraction prompt
+// ═══════════════════════════════════
+async function discoverUrls(goal, apiKey) {
+  const nvidiaUrl = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
+
+  const prompt = `You are a web research URL generator. Convert the user's high-level research goal into a JSON list of starting seed URLs (maximum 3 URLs) that are best suited to gather the initial information or links.
+
+Goal: "${goal}"
+
+RULES:
+- Return ONLY a valid JSON array of URL strings
+- Maximum 3 URLs
+- URLs must be real, publicly accessible web pages
+- NO markdown, NO backticks, NO explanation
+- Just the raw JSON array
+
+Example output format:
+["https://www.reddit.com/r/example/", "https://news.ycombinator.com/", "https://www.producthunt.com/"]`;
+
+  const response = await fetch(nvidiaUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      reasoning_budget: 0,
+      chat_template_kwargs: { enable_thinking: false }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`NVIDIA API responded with status ${response.status}: ${errorText}`);
+  }
+
+  const json = await response.json();
+  let text = json.choices?.[0]?.message?.content || '';
+
+  // Strip thinking tags if present
+  if (text.includes('<think>')) {
+    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  }
+  if (text.startsWith('</think>')) {
+    text = text.replace(/^<\/think>\s*/, '').trim();
+  }
+
+  // Strip markdown code blocks if present
+  if (text.startsWith('```')) {
+    text = text.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/```$/, '').trim();
+  }
+
+  console.log('Discovery LLM raw response:', text);
+
+  const parsed = JSON.parse(text);
+  if (!Array.isArray(parsed)) {
+    throw new Error('Discovery response was not an array');
+  }
+  return parsed.filter(u => typeof u === 'string' && u.startsWith('http')).slice(0, 3);
 }
 
 // Nemotron extraction helper
@@ -248,6 +321,21 @@ app.post('/scrape', async (req, res) => {
     console.error(`Failed to save state file for ${stateId}:`, err);
   }
 
+  // Track event
+  await trackEvent(
+    output.failed_count === output.total ? 'scrape_failed' : 'scrape_completed',
+    req.userHash,
+    req.sessionId,
+    {
+      stateId,
+      format: outFormat,
+      url_count: urls.length,
+      succeeded: output.succeeded,
+      failed_count: output.failed_count,
+      error: output.failed_count === output.total ? (output.failed[0]?.reason || 'All scrapes failed') : undefined
+    }
+  );
+
   return res.status(200).json(output);
 });
 
@@ -290,6 +378,14 @@ app.post('/scrape-stream', async (req, res) => {
   }
 
   const stateId = crypto.randomUUID();
+
+  // Track event
+  await trackEvent('scrape_started', req.userHash, req.sessionId, {
+    format: outFormat,
+    compare: compareMode,
+    url_count: urls.length,
+    prompt
+  });
 
   // Set SSE Headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -387,6 +483,23 @@ app.post('/scrape-stream', async (req, res) => {
   } catch (err) {
     console.error(`Failed to save state file for ${stateId}:`, err);
   }
+
+  // Track event
+  await trackEvent(
+    output.failed_count === output.total ? 'scrape_failed' : 'scrape_completed',
+    req.userHash,
+    req.sessionId,
+    {
+      stateId,
+      format: outFormat,
+      compare: compareMode,
+      url_count: urls.length,
+      succeeded: output.succeeded,
+      failed_count: output.failed_count,
+      error: output.failed_count === output.total ? (output.failed[0]?.reason || 'All scrapes failed') : undefined,
+      domains: results.map(r => r.url ? new URL(r.url).hostname : 'unknown')
+    }
+  );
 
   res.write(`data: ${JSON.stringify({
     type: "done",
@@ -497,7 +610,14 @@ app.post('/workflow', async (req, res) => {
 
   await saveWorkflowState(workflow);
 
-  runWorkflowAsync(workflow, targetDepth, firecrawlKey, nemotronKey);
+  // Track event
+  await trackEvent('workflow_started', req.userHash, req.sessionId, {
+    workflow_id: workflowId,
+    goal,
+    format: targetFormat
+  });
+
+  runWorkflowAsync(workflow, targetDepth, firecrawlKey, nemotronKey, req.userHash, req.sessionId);
 
   return res.status(201).json({
     workflow_id: workflowId,
@@ -507,23 +627,15 @@ app.post('/workflow', async (req, res) => {
 });
 
 // Asynchronous workflow executor
-async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey) {
+async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey, userHash, sessionId) {
   try {
     // --- STEP 1: Discovery ---
     workflow.current_step = 1;
     await saveWorkflowState(workflow);
 
-    const discoveryPrompt = `You are a web discovery agent. Convert the user's high-level research goal into a JSON list of starting seed URLs (maximum 3 URLs) that are best suited to gather the initial information or links.
-Goal: "${workflow.goal}"
-
-Return ONLY a JSON array of string URLs, like: ["https://example.com/page1", "https://example.com/page2"]. Do NOT include markdown blocks, reasoning, backticks, or any other wrapper text. Just the raw valid JSON array.`;
-
     let seedUrls = [];
     try {
-      const completionText = await extractSchema("Goal discovery context", discoveryPrompt, nemotronKey, 'json');
-      if (Array.isArray(completionText)) {
-        seedUrls = completionText.filter(u => typeof u === 'string' && u.startsWith('http')).slice(0, 3);
-      }
+      seedUrls = await discoverUrls(workflow.goal, nemotronKey);
     } catch (err) {
       console.error("Step 1 failed during LLM call:", err);
     }
@@ -658,13 +770,34 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
     workflow.completed_at = Date.now();
     await saveWorkflowState(workflow);
 
+    // Track event
+    await trackEvent('workflow_completed', userHash, sessionId, {
+      workflow_id: workflow.workflow_id,
+      duration: workflow.completed_at - workflow.created_at,
+      urls_discovered: workflow.urls_discovered,
+      urls_scraped: workflow.urls_scraped,
+      results_count: workflow.results.length
+    });
+
   } catch (globalErr) {
     console.error("Workflow failed globally:", globalErr);
     workflow.status = 'failed';
     workflow.completed_at = Date.now();
     await saveWorkflowState(workflow);
+
+    // Track event
+    await trackEvent('workflow_failed', userHash, sessionId, {
+      workflow_id: workflow.workflow_id,
+      duration: workflow.completed_at - workflow.created_at,
+      error: globalErr.message || String(globalErr)
+    });
   }
 }
+
+// Mount routers
+app.use('/analytics', analyticsRouter);
+app.use(feedbackRouter);
+app.use(dashboardRouter);
 
 app.listen(PORT, () => {
   console.log(`Nexus AI API server running on port ${PORT}`);

@@ -1,3 +1,59 @@
+// Client-side Event tracking helper
+async function trackClientEvent(eventType, metadata = {}) {
+  try {
+    await fetch('/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType, metadata })
+    });
+  } catch (e) {
+    console.error('Event tracking failed:', e);
+  }
+}
+
+// Animate values
+function animateHeroCounter(id, targetVal) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  
+  let isPercentage = false;
+  let numericTarget = targetVal;
+  if (typeof targetVal === 'string' && targetVal.endsWith('%')) {
+    isPercentage = true;
+    numericTarget = parseInt(targetVal) || 0;
+  }
+  
+  let current = 0;
+  const duration = 1200;
+  const step = numericTarget / (duration / 16);
+  
+  function tick() {
+    current += step;
+    if (current >= numericTarget) {
+      el.textContent = isPercentage ? `${Math.round(numericTarget)}%` : Math.round(numericTarget).toLocaleString();
+      return;
+    }
+    el.textContent = isPercentage ? `${Math.round(current)}%` : Math.round(current).toLocaleString();
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+async function loadHeroAnalytics() {
+  try {
+    const res = await fetch('/analytics');
+    const data = await res.json();
+    animateHeroCounter('statUsers', data.users.total_unique || 0);
+    animateHeroCounter('statWorkflows', data.workflows.started || 0);
+    animateHeroCounter('statUrls', data.scrapes.total_urls || 0);
+    animateHeroCounter('statSuccess', `${data.workflows.success_rate || 0}%`);
+  } catch (e) {
+    console.error('Failed to load hero analytics:', e);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadHeroAnalytics);
+
 function setPrompt(text) {
   document.getElementById('prompt').value = text;
 }
@@ -354,6 +410,12 @@ function startWorkflowPolling(workflowId) {
 
         if (data.status === 'completed') {
           showWorkflowResults(data);
+          // Trigger YC Product Learning survey modal
+          setTimeout(function() {
+            if (typeof triggerFeedbackModal === 'function') {
+              triggerFeedbackModal(data.goal);
+            }
+          }, 2000);
         } else {
           var errorCard = document.getElementById('wfErrorCard');
           errorCard.style.display = 'block';
@@ -423,6 +485,7 @@ function showWorkflowResults(data) {
 
 function downloadWorkflowJson() {
   if (!currentWorkflowData) return;
+  trackClientEvent('json_downloaded', { workflowId: currentWorkflowData.workflow_id }).catch(console.error);
   var jsonStr = JSON.stringify(currentWorkflowData, null, 2);
   var blob = new Blob([jsonStr], { type: 'application/json' });
   var url = URL.createObjectURL(blob);

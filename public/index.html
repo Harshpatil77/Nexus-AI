@@ -26,11 +26,24 @@
     tell us what you want.
     </p>
     
-    <!-- 3 stat pills -->
+    <!-- 4 live metrics from founder analytics -->
     <div class="stats-row">
-      <div class="stat">⚡ 5 URLs in parallel</div>
-      <div class="stat">🔄 Auto-retry on failures</div>
-      <div class="stat">🎯 Plain English prompts</div>
+      <div class="stat">
+        <span class="stat-number" id="statUsers">—</span>
+        <span class="stat-label">Developers</span>
+      </div>
+      <div class="stat">
+        <span class="stat-number" id="statWorkflows">—</span>
+        <span class="stat-label">Workflows</span>
+      </div>
+      <div class="stat">
+        <span class="stat-number" id="statUrls">—</span>
+        <span class="stat-label">URLs Processed</span>
+      </div>
+      <div class="stat">
+        <span class="stat-number" id="statSuccess">—</span>
+        <span class="stat-label">Success Rate</span>
+      </div>
     </div>
   </div>
 
@@ -280,6 +293,82 @@
     </div>
   </footer>
 
+<!-- Feedback Modal Overlay -->
+<div class="feedback-modal-overlay" id="feedbackModalOverlay">
+  <div class="feedback-modal-window">
+    <button class="feedback-close-btn" onclick="closeFeedbackModal()">×</button>
+    <div class="feedback-slides-container">
+      
+      <!-- Slide 1: Solved problem -->
+      <div class="feedback-slide" id="feedbackSlide1">
+        <h3>Did Nexus solve your problem?</h3>
+        <p>Your honest answer helps us improve. No sales pitching here.</p>
+        <div class="thumbs-row">
+          <button class="thumb-btn" id="thumbUp" onclick="selectSolved(true)">👍</button>
+          <button class="thumb-btn" id="thumbDown" onclick="selectSolved(false)">👎</button>
+        </div>
+      </div>
+
+      <!-- Slide 2: Segment -->
+      <div class="feedback-slide" id="feedbackSlide2">
+        <h3>What are you building?</h3>
+        <p>Help us understand the target audience.</p>
+        <div class="pills-grid">
+          <div class="pill-option" onclick="selectBuilding('AI Agent', this)">AI Agent</div>
+          <div class="pill-option" onclick="selectBuilding('Startup', this)">Startup</div>
+          <div class="pill-option" onclick="selectBuilding('Research', this)">Research</div>
+          <div class="pill-option" onclick="selectBuilding('Internal Tool', this)">Internal Tool</div>
+          <div class="pill-option" onclick="selectBuilding('Automation', this)">Automation</div>
+          <div class="pill-option" onclick="selectBuilding('Other', this)">Other</div>
+        </div>
+      </div>
+
+      <!-- Slide 3: Goal context -->
+      <div class="feedback-slide" id="feedbackSlide3">
+        <h3>What were you trying to accomplish?</h3>
+        <p>Short text describing your extraction or workflow goal.</p>
+        <textarea class="feedback-textarea" id="wfFeedbackGoal" rows="3" placeholder="e.g. Compare AI startups pricing lists..."></textarea>
+      </div>
+
+      <!-- Slide 4: Expectation gaps -->
+      <div class="feedback-slide" id="feedbackSlide4">
+        <h3>Any feature you expected that was missing?</h3>
+        <p>(Optional) What did you expect Nexus to do that it couldn't?</p>
+        <textarea class="feedback-textarea" id="wfFeedbackExpect" rows="3" placeholder="e.g. Stealth proxy capability, Google sheet sync..."></textarea>
+      </div>
+
+      <!-- Slide 5: Reuse Likelihood -->
+      <div class="feedback-slide" id="feedbackSlide5">
+        <h3>How likely are you to use Nexus again?</h3>
+        <p>From 1 (Never) to 5 (Daily companion)</p>
+        <div class="rating-row">
+          <button class="rating-btn" id="rating-1" onclick="selectRating(1)">1</button>
+          <button class="rating-btn" id="rating-2" onclick="selectRating(2)">2</button>
+          <button class="rating-btn" id="rating-3" onclick="selectRating(3)">3</button>
+          <button class="rating-btn" id="rating-4" onclick="selectRating(4)">4</button>
+          <button class="rating-btn" id="rating-5" onclick="selectRating(5)">5</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Navigation Footer -->
+    <div class="feedback-nav-row">
+      <button class="feedback-skip-link" onclick="closeFeedbackModal()">Skip survey</button>
+      <div class="feedback-dots">
+        <span class="feedback-dot" id="feedbackDot1"></span>
+        <span class="feedback-dot" id="feedbackDot2"></span>
+        <span class="feedback-dot" id="feedbackDot3"></span>
+        <span class="feedback-dot" id="feedbackDot4"></span>
+        <span class="feedback-dot" id="feedbackDot5"></span>
+      </div>
+      <button class="feedback-next-btn" id="feedbackNextBtn" onclick="handleNextStep()" disabled>Next</button>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="feedback.css">
+<script src="feedback.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
