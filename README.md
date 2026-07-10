@@ -58,9 +58,9 @@ Nexus AI is a production-ready web scraping + AI extraction API. Paste URLs, des
 |---|---|
 | **Runtime** | Node.js (ES Modules) |
 | **Framework** | Express 4.x |
-| **Scraping** | [Firecrawl API](https://firecrawl.dev) |
+| **Scraping** | Firecrawl (Tier 1) · Scrape.do (Tier 2) · Scrapfly ASP (Tier 3) |
 | **AI Extraction** | [NVIDIA Nemotron 3 Ultra 550B](https://build.nvidia.com) via NVIDIA API |
-| **Frontend** | Vanilla HTML/CSS/JS (served inline) |
+| **Frontend** | Vanilla HTML/CSS/JS (served from `public/`) |
 | **Fonts** | Space Grotesk · Inter · JetBrains Mono |
 | **Deployment** | [Railway](https://railway.app) |
 
@@ -103,6 +103,13 @@ ADMIN_PASSWORD=choose_a_long_unique_password
 ```
 
 > **Note:** The `ANTHROPIC_API_KEY` variable is used to authenticate with the NVIDIA Nemotron API endpoint.
+> `SCRAPEDO_API_KEY` and `SCRAPFLY_API_KEY` are optional, but without them blocked pages cannot be escalated beyond Firecrawl.
+
+### Smart Scrape Routing
+
+Each URL starts with **Tier 1 — Firecrawl**. Blocked or insufficient responses escalate to **Tier 2 — Scrape.do** with JavaScript rendering, then **Tier 3 — Scrapfly** with ASP and JavaScript rendering. Known hostile domains—including LinkedIn, Amazon, Google, Facebook, Twitter, Instagram, and Cloudflare—route directly to Tier 3.
+
+Successful scrape results include `tier_used` (`1`, `2`, or `3`). When every tier fails, the URL is returned in `failed` with `All tiers exhausted — site may require authentication`.
 
 ### Run
 
@@ -166,6 +173,7 @@ Every successful scrape result includes `tier_used`: `1` for Firecrawl, `2` for 
   "results": [
     {
       "url": "https://example.com",
+      "tier_used": 1,
       "data": {
         "company": "Example Corp",
         "pricing": "$99/mo",
@@ -324,7 +332,7 @@ Nexus AI is deployed on **Railway** with automatic deploys from the `main` branc
 
 1. Fork this repository
 2. Connect to [Railway](https://railway.app)
-3. Add environment variables (`FIRECRAWL_API_KEY`, `ANTHROPIC_API_KEY`)
+3. Add environment variables (`FIRECRAWL_API_KEY`, `ANTHROPIC_API_KEY`, `SCRAPEDO_API_KEY`, `SCRAPFLY_API_KEY`)
 4. Deploy — Railway auto-detects Node.js and runs `npm start`
 
 ---
