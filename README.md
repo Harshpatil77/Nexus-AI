@@ -96,6 +96,8 @@ Edit `.env` with your API keys:
 PORT=3000
 FIRECRAWL_API_KEY=your_firecrawl_api_key_here
 ANTHROPIC_API_KEY=your_nvidia_api_key_here
+SCRAPEDO_API_KEY=your_scrape_do_key_here
+SCRAPFLY_API_KEY=your_scrapfly_key_here
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=choose_a_long_unique_password
 ```
@@ -153,6 +155,8 @@ Scrape URLs and extract structured data. Returns results after all URLs are proc
 | `urls` | `string[]` | ✅ | Array of URLs to scrape (max 5) |
 | `prompt` | `string` | ✅ | Plain English extraction instructions |
 | `format` | `string` | ❌ | `"json"` or `"text"` (default: `"text"`) |
+
+Every successful scrape result includes `tier_used`: `1` for Firecrawl, `2` for Scrape.do, or `3` for Scrapfly.
 
 **Success Response (200):**
 ```json
@@ -300,7 +304,7 @@ node test_api.js
 | 1 | `GET /health` returns correct status |
 | 2 | Input validation rejects bad requests |
 | 3 | Successful multi-URL scrape and extraction |
-| 4 | Retry logic (3 attempts) and partial failure handling |
+| 4 | Tier exhaustion and partial failure handling |
 | 5 | State file persistence and retrieval |
 | 6 | `POST /workflow` returns 201 with workflow_id |
 | 7 | `GET /workflow/:id` returns valid processing/completed status |

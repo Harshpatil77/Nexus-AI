@@ -33,7 +33,7 @@ async function runTests() {
     return res.json({
       success: true,
       data: {
-        markdown: `Mock markdown content for ${url}`
+        markdown: `Mock markdown content for ${url}. `.repeat(5)
       }
     });
   });
@@ -183,20 +183,21 @@ async function runTests() {
       scrapeData.results.length === 2 &&
       scrapeData.failed.length === 0
     ) {
+      if (!scrapeData.results.every(result => result.tier_used === 1)) {
+        throw new Error('Step 3 Failed: successful results did not report Tier 1');
+      }
       console.log('✅ Step 3 Passed: Both URLs processed and extracted successfully');
     } else {
       throw new Error('Step 3 Failed: Result count or status mismatched');
     }
 
     // -------------------------------------------------------------
-    // STEP 4: Verify Error Handling & Retry Logic
+    // STEP 4: Verify Error Handling & Tier Exhaustion
     // -------------------------------------------------------------
-    console.log('\n--- Verification Step 4: Error Handling & Retry Logic ---');
+    console.log('\n--- Verification Step 4: Error Handling & Tier Exhaustion ---');
     
     // Reset call tracking
     urlsScraped['https://fail.com'] = 0;
-    const startFirecrawlCalls = firecrawlCalls;
-
     const failScrapeRes = await fetch('http://localhost:3000/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -210,12 +211,12 @@ async function runTests() {
     console.log('Partial failure scrape response:', JSON.stringify(failScrapeData, null, 2));
     createdStateFiles.push(failScrapeData.state_id);
 
-    // Verify retry count for https://fail.com
+    // The router tries Firecrawl once, then falls through unavailable fallback tiers.
     const attempts = urlsScraped['https://fail.com'] || 0;
     console.log(`Firecrawl scrape attempts for https://fail.com: ${attempts}`);
 
-    if (attempts !== 3) {
-      throw new Error(`Expected exactly 3 scrape attempts for https://fail.com, but got ${attempts}`);
+    if (attempts !== 1) {
+      throw new Error(`Expected exactly 1 Tier 1 attempt for https://fail.com, but got ${attempts}`);
     }
 
     if (
@@ -223,9 +224,10 @@ async function runTests() {
       failScrapeData.succeeded === 1 &&
       failScrapeData.failed_count === 1 &&
       failScrapeData.failed[0].url === 'https://fail.com' &&
+      failScrapeData.failed[0].reason === 'All tiers exhausted — site may require authentication' &&
       failScrapeData.results[0].url === 'https://success-after-fail.com'
     ) {
-      console.log('✅ Step 4 Passed: 3 retries performed for failing URL, and failures caught individually without stopping success URL');
+      console.log('✅ Step 4 Passed: exhausted tiers are reported without stopping successful URLs');
     } else {
       throw new Error('Step 4 Failed: Expected failure counts/properties did not match');
     }

@@ -18,6 +18,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Keep the dashboard HTML behind its authenticated route; do not expose it via static files.
 app.use('/admin.html', (req, res) => res.status(404).send('Not found'));
@@ -48,9 +49,6 @@ app.post('/track', async (req, res) => {
   res.json({ success: true });
 });
 
-// Helper for delay
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 // Concurrency limit helper
 async function runWithConcurrencyLimit(tasks, limit) {
   const results = [];
@@ -68,43 +66,138 @@ async function runWithConcurrencyLimit(tasks, limit) {
   return Promise.all(results);
 }
 
-// Scrape helper with 3 retries, 2s wait
-async function scrapeWithRetry(url, apiKey, retries = 3, delayMs = 2000) {
-  let lastError = null;
-  for (let attempt = 1; attempt <= retries; attempt++) {
+const HOSTILE_DOMAINS = [
+  'linkedin.com',
+  'amazon.com',
+  'google.com',
+  'facebook.com',
+  'twitter.com',
+  'instagram.com',
+  'cloudflare.com'
+];
+
+function isHostileDomain(url) {
+  const normalizedUrl = String(url).toLowerCase();
+  return HOSTILE_DOMAINS.some(domain => normalizedUrl.includes(domain));
+}
+
+function htmlToMarkdown(html) {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function tierOne(url, apiKey) {
+  const firecrawlUrl = process.env.FIRECRAWL_API_URL || 'https://api.firecrawl.dev/v1/scrape';
+  const response = await fetch(firecrawlUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ url, formats: ['markdown'] })
+  });
+
+  if (!response.ok) throw new Error(`Firecrawl ${response.status}`);
+  const json = await response.json();
+  return json.data?.markdown || '';
+}
+
+async function tierTwo(url) {
+  const scrapeDoKey = process.env.SCRAPEDO_API_KEY;
+  if (!scrapeDoKey) throw new Error('Scrape.do key not configured');
+
+  const response = await fetch(
+    `https://api.scrape.do?token=${encodeURIComponent(scrapeDoKey)}&url=${encodeURIComponent(url)}&render=true`,
+    { method: 'GET' }
+  );
+  if (!response.ok) throw new Error(`Scrape.do ${response.status}`);
+  return htmlToMarkdown(await response.text());
+}
+
+async function tierThree(url) {
+  const scrapflyKey = process.env.SCRAPFLY_API_KEY;
+  if (!scrapflyKey) throw new Error('Scrapfly key not configured');
+
+  const response = await fetch(
+    `https://api.scrapfly.io/scrape?key=${encodeURIComponent(scrapflyKey)}&url=${encodeURIComponent(url)}&asp=true&render_js=true&format=markdown`,
+    { method: 'GET' }
+  );
+  if (!response.ok) throw new Error(`Scrapfly ${response.status}`);
+  const json = await response.json();
+  return json.result?.content || '';
+}
+
+function isBlockedResponse(markdown) {
+  const content = String(markdown || '');
+  const normalizedContent = content.toLowerCase();
+  return !content || content.length < 100 ||
+    normalizedContent.includes('loading...') ||
+    normalizedContent.includes('enable javascript') ||
+    normalizedContent.includes('please enable') ||
+    normalizedContent.includes('403') ||
+    normalizedContent.includes('cloudflare');
+}
+
+function isFirewallError(error) {
+  const message = String(error.message || error).toLowerCase();
+  return message.includes('403') || message.includes('429') ||
+    message.includes('cloudflare') || message.includes('perimeterx') ||
+    message.includes('akamai');
+}
+
+// Three-tier scraper router: Firecrawl, then Scrape.do, then Scrapfly ASP.
+async function smartScrape(url, firecrawlKey) {
+  if (isHostileDomain(url)) {
+    console.log('Hostile domain detected, routing to Tier 3:', url);
     try {
-      const firecrawlUrl = process.env.FIRECRAWL_API_URL || 'https://api.firecrawl.dev/v1/scrape';
-      const response = await fetch(firecrawlUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          url: url,
-          formats: ['markdown']
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Firecrawl API responded with status ${response.status}: ${errorText}`);
-      }
-
-      const json = await response.json();
-      if (!json.success || !json.data || !json.data.markdown) {
-        throw new Error(`Firecrawl scraping failed or returned empty markdown`);
-      }
-
-      return json.data.markdown;
+      const markdown = await tierThree(url);
+      if (!isBlockedResponse(markdown)) return { markdown, tierUsed: 3 };
     } catch (error) {
-      lastError = error;
-      if (attempt < retries) {
-        await delay(delayMs);
-      }
+      console.log('Tier 3 failed:', error.message);
+    }
+    throw new Error('All tiers exhausted — site may require authentication');
+  }
+
+  try {
+    const markdown = await tierOne(url, firecrawlKey);
+    if (!isBlockedResponse(markdown)) {
+      console.log('Tier 1 success:', url);
+      return { markdown, tierUsed: 1 };
+    }
+    console.log('Tier 1 blocked, escalating to Tier 2:', url);
+  } catch (error) {
+    console.log('Tier 1 failed:', error.message);
+  }
+
+  try {
+    const markdown = await tierTwo(url);
+    if (!isBlockedResponse(markdown)) {
+      console.log('Tier 2 success:', url);
+      return { markdown, tierUsed: 2 };
+    }
+    console.log('Tier 2 blocked, escalating to Tier 3:', url);
+  } catch (error) {
+    console.log('Tier 2 failed:', error.message);
+    if (!isFirewallError(error) && !String(error.message || '').includes('key not configured')) {
+      throw error;
     }
   }
-  throw lastError || new Error(`Failed to scrape after ${retries} retries`);
+
+  try {
+    const markdown = await tierThree(url);
+    if (!isBlockedResponse(markdown)) {
+      console.log('Tier 3 success:', url);
+      return { markdown, tierUsed: 3 };
+    }
+  } catch (error) {
+    console.log('Tier 3 failed:', error.message);
+  }
+
+  throw new Error('All tiers exhausted — site may require authentication');
 }
 
 // ═══════════════════════════════════
@@ -287,13 +380,14 @@ app.post('/scrape', async (req, res) => {
   const tasks = urls.map((url) => async () => {
     try {
       console.log('1. Starting Firecrawl:', Date.now());
-      const markdown = await scrapeWithRetry(url, firecrawlKey);
+      const scrape = await smartScrape(url, firecrawlKey);
+      const { markdown, tierUsed } = scrape;
       console.log('2. Firecrawl done:', Date.now());
 
       const data = await extractSchema(markdown, prompt, nemotronKey, outFormat);
       console.log('3. Claude done:', Date.now());
 
-      return { url, data, success: true };
+      return { url, data, tierUsed, success: true };
     } catch (error) {
       console.log('Task execution failed:', error.message);
       return { url, reason: error.message || String(error), success: false };
@@ -309,6 +403,7 @@ app.post('/scrape', async (req, res) => {
     if (item.success) {
       results.push({
         url: item.url,
+        tier_used: item.tierUsed,
         data: item.data
       });
     } else {
@@ -416,9 +511,10 @@ app.post('/scrape-stream', async (req, res) => {
   const scrapeTasks = urls.map((url) => async () => {
     try {
       console.log('1. Starting Firecrawl:', Date.now());
-      const markdown = await scrapeWithRetry(url, firecrawlKey);
+      const scrape = await smartScrape(url, firecrawlKey);
+      const { markdown, tierUsed } = scrape;
       console.log('2. Firecrawl done:', Date.now());
-      return { url, markdown, success: true };
+      return { url, markdown, tierUsed, success: true };
     } catch (error) {
       console.log('Scrape failed:', error.message);
       return { url, reason: error.message || String(error), success: false };
@@ -431,7 +527,7 @@ app.post('/scrape-stream', async (req, res) => {
   for (const sr of scrapeResults) {
     if (sr.success) {
       scrapedOk.push(sr);
-      scrapedMarkdowns.push({ url: sr.url, markdown: sr.markdown });
+      scrapedMarkdowns.push({ url: sr.url, markdown: sr.markdown, tierUsed: sr.tierUsed });
     } else {
       failed.push({ url: sr.url, reason: sr.reason });
     }
@@ -442,7 +538,7 @@ app.post('/scrape-stream', async (req, res) => {
       total: urls.length,
       phase: "scraping",
       current_url: sr.url,
-      result: { url: sr.url, success: sr.success }
+      result: { url: sr.url, tier_used: sr.tierUsed, success: sr.success }
     })}\n\n`);
   }
 
@@ -463,7 +559,12 @@ app.post('/scrape-stream', async (req, res) => {
     try {
       const data = await extractSchema(combinedMarkdown, prompt, nemotronKey, outFormat);
       console.log('3. Compare extraction done:', Date.now());
-      results.push({ url: 'combined-comparison', sources: scrapedMarkdowns.map(s => s.url), data });
+      results.push({
+        url: 'combined-comparison',
+        sources: scrapedMarkdowns.map(s => s.url),
+        tier_used: scrapedMarkdowns.map(s => s.tierUsed),
+        data
+      });
     } catch (error) {
       console.log('Compare extraction failed:', error.message);
       failed.push({ url: 'combined-comparison', reason: error.message || String(error) });
@@ -473,7 +574,7 @@ app.post('/scrape-stream', async (req, res) => {
       try {
         const data = await extractSchema(sr.markdown, prompt, nemotronKey, outFormat);
         console.log('3. Extraction done:', Date.now());
-        results.push({ url: sr.url, data });
+        results.push({ url: sr.url, tier_used: sr.tierUsed, data });
       } catch (error) {
         console.log('Extraction failed:', error.message);
         failed.push({ url: sr.url, reason: error.message || String(error) });
@@ -674,14 +775,15 @@ async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey, user
 
     const seedScrapeTasks = seedUrls.map((url) => async () => {
       try {
-        const markdown = await scrapeWithRetry(url, firecrawlKey);
+        const scrape = await smartScrape(url, firecrawlKey);
+        const { markdown, tierUsed } = scrape;
         if (depth === 1) {
-          return { url, markdown, success: true, deepLinks: [] };
+          return { url, markdown, tierUsed, success: true, deepLinks: [] };
         }
         const extractLinksPrompt = `Read this page markdown and extract all relevant hyperlinks matching or pointing to pages related to: "${workflow.goal}".
 Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code blocks, or text. Just the raw valid JSON array.`;
         const deepLinks = await extractSchema(markdown, extractLinksPrompt, nemotronKey, 'json');
-        return { url, markdown, success: true, deepLinks: Array.isArray(deepLinks) ? deepLinks : [] };
+        return { url, markdown, tierUsed, success: true, deepLinks: Array.isArray(deepLinks) ? deepLinks : [] };
       } catch (err) {
         return { url, success: false, reason: err.message || String(err) };
       }
@@ -727,12 +829,15 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
     await saveWorkflowState(workflow);
 
     const pagesToExtract = depth === 1
-      ? seedScrapeResults.filter(result => result.success).map(result => ({ url: result.url, markdown: result.markdown, alreadyScraped: true }))
+      ? seedScrapeResults.filter(result => result.success).map(result => ({ url: result.url, markdown: result.markdown, tierUsed: result.tierUsed, alreadyScraped: true }))
       : deepLinksToScrape.map(url => ({ url, alreadyScraped: false }));
 
     const deepScrapeTasks = pagesToExtract.map((page) => async () => {
       try {
-        const markdown = page.alreadyScraped ? page.markdown : await scrapeWithRetry(page.url, firecrawlKey);
+        const scrape = page.alreadyScraped
+          ? { markdown: page.markdown, tierUsed: page.tierUsed }
+          : await smartScrape(page.url, firecrawlKey);
+        const { markdown, tierUsed } = scrape;
         let extractionPrompt, formatType;
         if (workflow.format === 'text') {
           extractionPrompt = `Extract information matching this goal: "${workflow.goal}".\nReturn the answer as clean, readable plain text. No additional explanations.`;
@@ -742,7 +847,7 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
           formatType = 'json';
         }
         const data = await extractSchema(markdown, extractionPrompt, nemotronKey, formatType);
-        return { url: page.url, success: true, data, alreadyScraped: page.alreadyScraped };
+        return { url: page.url, success: true, data, tierUsed, alreadyScraped: page.alreadyScraped };
       } catch (err) {
         return { url: page.url, success: false, reason: err.message || String(err) };
       }
