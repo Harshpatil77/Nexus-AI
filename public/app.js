@@ -1,7 +1,7 @@
 // Client-side Event tracking helper
 async function trackClientEvent(eventType, metadata = {}) {
   try {
-    await fetch('/analytics/track', {
+    await fetch('/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ eventType, metadata })
@@ -41,7 +41,7 @@ function animateHeroCounter(id, targetVal) {
 
 async function loadHeroAnalytics() {
   try {
-    const res = await fetch('/analytics');
+    const res = await fetch('/metrics');
     const data = await res.json();
     animateHeroCounter('statUsers', data.users.total_unique || 0);
     animateHeroCounter('statWorkflows', data.workflows.started || 0);

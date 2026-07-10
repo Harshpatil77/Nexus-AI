@@ -387,6 +387,15 @@ export async function computeMetrics() {
   };
 }
 
+export async function getPublicMetrics() {
+  const metrics = await computeMetrics();
+  return {
+    users: { total_unique: metrics.users.total_unique },
+    workflows: { started: metrics.workflows.started, success_rate: metrics.workflows.success_rate },
+    scrapes: { total_urls: metrics.scrapes.total_urls }
+  };
+}
+
 // Automated Insights Generator
 export async function getInsights() {
   const metrics = await computeMetrics();

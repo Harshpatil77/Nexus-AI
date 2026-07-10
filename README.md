@@ -96,6 +96,8 @@ Edit `.env` with your API keys:
 PORT=3000
 FIRECRAWL_API_KEY=your_firecrawl_api_key_here
 ANTHROPIC_API_KEY=your_nvidia_api_key_here
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=choose_a_long_unique_password
 ```
 
 > **Note:** The `ANTHROPIC_API_KEY` variable is used to authenticate with the NVIDIA Nemotron API endpoint.
@@ -142,8 +144,7 @@ Scrape URLs and extract structured data. Returns results after all URLs are proc
     "https://example2.com"
   ],
   "prompt": "Extract the company name, pricing, and contact email",
-  "format": "json",
-  "compareMode": false
+  "format": "json"
 }
 ```
 
@@ -152,7 +153,6 @@ Scrape URLs and extract structured data. Returns results after all URLs are proc
 | `urls` | `string[]` | ✅ | Array of URLs to scrape (max 5) |
 | `prompt` | `string` | ✅ | Plain English extraction instructions |
 | `format` | `string` | ❌ | `"json"` or `"text"` (default: `"text"`) |
-| `compareMode` | `boolean` | ❌ | Combine all URL content into one extraction (default: `false`) |
 
 **Success Response (200):**
 ```json
@@ -191,7 +191,7 @@ Scrape URLs and extract structured data. Returns results after all URLs are proc
 
 Same as `/scrape` but streams progress in real-time via Server-Sent Events (SSE).
 
-**Request Body:** Same as `POST /scrape`.
+**Request Body:** Same as `POST /scrape`, with an optional `compare` boolean. Set `compare: true` to combine successful pages into one extraction.
 
 **SSE Events:**
 
@@ -329,12 +329,14 @@ Nexus AI is deployed on **Railway** with automatic deploys from the `main` branc
 
 ```
 Nexus-AI/
-├── index.js          # Server, API routes, and inline frontend UI
-├── test_api.js       # Integration test suite with mock servers
-├── package.json      # Dependencies and scripts
-├── .env.example      # Environment variable template
-├── .gitignore        # Git ignore rules
-└── README.md         # You are here
+├── index.js          # Express server, API routes, and workflow logic
+├── analytics/         # Analytics, feedback, and protected dashboard routes
+├── public/            # Main UI, feedback UI, and dashboard assets
+├── test_api.js        # Integration test suite with mock servers
+├── package.json       # Dependencies and scripts
+├── .env.example       # Environment variable template
+├── .gitignore         # Git ignore rules
+└── README.md          # You are here
 ```
 
 ---

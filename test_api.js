@@ -334,6 +334,32 @@ async function runTests() {
     }
     console.log('✅ Workflow Test 3 Passed: Workflow eventually completed successfully');
 
+    // Test 4: depth 1 extracts only seed pages and does not follow discovered links
+    console.log('Testing depth 1 seed-only workflow...');
+    const depthOneRes = await fetch('http://localhost:3000/workflow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal: 'Find AI tools', depth: 1 })
+    });
+    if (depthOneRes.status !== 201) throw new Error(`Expected 201 for depth 1 workflow, got ${depthOneRes.status}`);
+    const depthOne = await depthOneRes.json();
+    let completedDepthOne = null;
+    for (let poll = 0; poll < 10; poll++) {
+      await delay(250);
+      const pollRes = await fetch(`http://localhost:3000/workflow/${depthOne.workflow_id}`);
+      const pollData = await pollRes.json();
+      if (pollData.status === 'completed' || pollData.status === 'failed') {
+        completedDepthOne = pollData;
+        break;
+      }
+    }
+    if (!completedDepthOne || completedDepthOne.status !== 'completed') throw new Error('Depth 1 workflow did not complete');
+    if (completedDepthOne.urls_discovered !== 2 || completedDepthOne.urls_scraped !== 2) {
+      throw new Error(`Depth 1 followed links unexpectedly: discovered ${completedDepthOne.urls_discovered}, scraped ${completedDepthOne.urls_scraped}`);
+    }
+    await fs.unlink(path.join(process.cwd(), `workflow_${depthOne.workflow_id}.json`));
+    console.log('✅ Depth 1 workflow test passed: seed pages were extracted without following links');
+
     // Clean up workflow state file
     const wfFilePath = path.join(process.cwd(), `workflow_${wfPostData.workflow_id}.json`);
     try {

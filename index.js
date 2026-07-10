@@ -6,9 +6,9 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 
 // Analytics System Imports
-import { analyticsMiddleware, trackEvent, analyticsRouter, ensureDataFiles } from './analytics/analytics.js';
+import { analyticsMiddleware, trackEvent, analyticsRouter, ensureDataFiles, getPublicMetrics } from './analytics/analytics.js';
 import feedbackRouter from './analytics/feedback.js';
-import dashboardRouter from './analytics/dashboard.js';
+import dashboardRouter, { adminAuth } from './analytics/dashboard.js';
 
 dotenv.config();
 await ensureDataFiles();
@@ -18,6 +18,9 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Keep the dashboard HTML behind its authenticated route; do not expose it via static files.
+app.use('/admin.html', (req, res) => res.status(404).send('Not found'));
 
 // Add static file serving BEFORE routes
 app.use(express.static('public'));
@@ -30,6 +33,19 @@ app.get('/', (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
+});
+
+// Public metrics are intentionally limited to counters displayed on the product homepage.
+app.get('/metrics', async (req, res) => {
+  res.json(await getPublicMetrics());
+});
+
+// Client event collection stays public; detailed analytics are protected below.
+app.post('/track', async (req, res) => {
+  const { eventType, metadata } = req.body;
+  if (!eventType) return res.status(400).json({ error: 'eventType is required' });
+  await trackEvent(eventType, req.userHash, req.sessionId, metadata || {});
+  res.json({ success: true });
 });
 
 // Helper for delay
@@ -659,10 +675,13 @@ async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey, user
     const seedScrapeTasks = seedUrls.map((url) => async () => {
       try {
         const markdown = await scrapeWithRetry(url, firecrawlKey);
+        if (depth === 1) {
+          return { url, markdown, success: true, deepLinks: [] };
+        }
         const extractLinksPrompt = `Read this page markdown and extract all relevant hyperlinks matching or pointing to pages related to: "${workflow.goal}".
 Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code blocks, or text. Just the raw valid JSON array.`;
         const deepLinks = await extractSchema(markdown, extractLinksPrompt, nemotronKey, 'json');
-        return { url, success: true, deepLinks: Array.isArray(deepLinks) ? deepLinks : [] };
+        return { url, markdown, success: true, deepLinks: Array.isArray(deepLinks) ? deepLinks : [] };
       } catch (err) {
         return { url, success: false, reason: err.message || String(err) };
       }
@@ -697,19 +716,23 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
     workflow.steps_completed.push(2);
     await saveWorkflowState(workflow);
 
-    // --- STEP 3: Deep Scraping Discovered Links ---
+    // --- STEP 3: Extract seed pages at depth 1, or scrape discovered links at depth 2 ---
     workflow.current_step = 3;
     await saveWorkflowState(workflow);
 
     const remainingUrlQuota = Math.max(0, 8 - workflow.urls_scraped);
-    const deepLinksToScrape = allDeepLinks.slice(0, remainingUrlQuota);
+    const deepLinksToScrape = depth === 2 ? allDeepLinks.slice(0, remainingUrlQuota) : [];
 
-    workflow.urls_discovered = seedUrls.length + allDeepLinks.length;
+    workflow.urls_discovered = depth === 2 ? seedUrls.length + allDeepLinks.length : seedUrls.length;
     await saveWorkflowState(workflow);
 
-    const deepScrapeTasks = deepLinksToScrape.map((url) => async () => {
+    const pagesToExtract = depth === 1
+      ? seedScrapeResults.filter(result => result.success).map(result => ({ url: result.url, markdown: result.markdown, alreadyScraped: true }))
+      : deepLinksToScrape.map(url => ({ url, alreadyScraped: false }));
+
+    const deepScrapeTasks = pagesToExtract.map((page) => async () => {
       try {
-        const markdown = await scrapeWithRetry(url, firecrawlKey);
+        const markdown = page.alreadyScraped ? page.markdown : await scrapeWithRetry(page.url, firecrawlKey);
         let extractionPrompt, formatType;
         if (workflow.format === 'text') {
           extractionPrompt = `Extract information matching this goal: "${workflow.goal}".\nReturn the answer as clean, readable plain text. No additional explanations.`;
@@ -719,9 +742,9 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
           formatType = 'json';
         }
         const data = await extractSchema(markdown, extractionPrompt, nemotronKey, formatType);
-        return { url, success: true, data };
+        return { url: page.url, success: true, data, alreadyScraped: page.alreadyScraped };
       } catch (err) {
-        return { url, success: false, reason: err.message || String(err) };
+        return { url: page.url, success: false, reason: err.message || String(err) };
       }
     });
 
@@ -730,7 +753,7 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
     let rawResults = [];
     for (const r of deepScrapeResults) {
       if (r.success) {
-        workflow.urls_scraped++;
+        if (!r.alreadyScraped) workflow.urls_scraped++;
         if (workflow.format === 'text') {
           rawResults.push({ url: r.url, text: r.data });
         } else {
@@ -795,7 +818,7 @@ Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code bl
 }
 
 // Mount routers
-app.use('/analytics', analyticsRouter);
+app.use('/analytics', adminAuth, analyticsRouter);
 app.use(feedbackRouter);
 app.use(dashboardRouter);
 
