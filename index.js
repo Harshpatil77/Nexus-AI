@@ -766,6 +766,35 @@ async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey, user
             console.log('Link extraction failed:', error.message);
           }
         }
+
+        // Extract goal data directly from the seed page so single-page sources
+        // such as YC RFS produce results without relying on deep links.
+        if (markdown && markdown.length > 50) {
+          try {
+            let extractionPrompt, formatType;
+            if (workflow.format === 'text') {
+              extractionPrompt = `Extract information matching this goal: "${workflow.goal}". Return clean readable plain text. Be specific and detailed.`;
+              formatType = 'text';
+            } else {
+              extractionPrompt = `Extract information matching this goal: "${workflow.goal}". Return ONLY a valid JSON object or array. No explanation.`;
+              formatType = 'json';
+            }
+
+            const seedData = await extractSchema(markdown, extractionPrompt, nemotronKey, formatType);
+            if (seedData) {
+              if (workflow.format === 'text') {
+                workflow.results.push({ url: seedResult.url, text: seedData, source: 'seed' });
+              } else if (Array.isArray(seedData)) {
+                seedData.forEach(item => workflow.results.push(item));
+              } else if (typeof seedData === 'object') {
+                workflow.results.push(seedData);
+              }
+              await saveWorkflowState(workflow);
+            }
+          } catch (error) {
+            console.log('Seed extraction failed:', error.message);
+          }
+        }
         seedScrapeResults.push(seedScrapeResult);
         workflow.urls_scraped++;
       } catch (err) {
@@ -775,6 +804,21 @@ async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey, user
 
     workflow.steps_completed.push(2);
     await saveWorkflowState(workflow);
+
+    // Filter fragments and seed-page anchors before deep scraping.
+    allDeepLinks = allDeepLinks.filter(link => {
+      try {
+        const parsed = new URL(link);
+        if (parsed.hash) return false;
+        const cleanLink = parsed.origin + parsed.pathname;
+        return !seedUrls.some(seed => {
+          const parsedSeed = new URL(seed);
+          return parsedSeed.origin + parsedSeed.pathname === cleanLink;
+        });
+      } catch {
+        return false;
+      }
+    });
 
     // --- STEP 3: Extract seed pages at depth 1, or scrape discovered links at depth 2 ---
     workflow.current_step = 3;
@@ -838,11 +882,12 @@ async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey, user
     workflow.current_step = 4;
     await saveWorkflowState(workflow);
 
+    const allRawResults = [...workflow.results, ...rawResults];
     if (workflow.format === 'text') {
-      workflow.results = rawResults;
+      workflow.results = allRawResults;
     } else {
       const uniqueMap = new Map();
-      rawResults.forEach(item => {
+      allRawResults.forEach(item => {
         const key = item.name || item.title || item.url || JSON.stringify(item);
         if (!uniqueMap.has(key)) {
           uniqueMap.set(key, item);

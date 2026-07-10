@@ -42,7 +42,7 @@ async function runTests() {
   mockApp.post('/search', (req, res) => {
     firecrawlSearchCalls++;
     const { query, limit } = req.body;
-    if (query !== 'Find AI productivity tools with pricing' || limit !== 3) {
+    if (query !== 'Search for the startup requests of YC and give me a list of 10 which are fast to build' || limit !== 3) {
       return res.status(400).json({ success: false, error: 'Unexpected search request' });
     }
     return res.json({
@@ -67,7 +67,7 @@ async function runTests() {
       });
     } else if (content.includes('Extract all relevant URLs from this page')) {
       return res.json({
-        choices: [{ message: { content: '["https://deeplink1.com", "https://deeplink2.com"]' } }]
+        choices: [{ message: { content: '["https://deeplink1.com", "https://deeplink2.com", "https://seed1.com#rfs", "https://deeplink1.com#overview"]' } }]
       });
     } else if (content.includes('Extract information matching this goal')) {
       return res.json({
@@ -298,7 +298,7 @@ async function runTests() {
     const wfPostRes = await fetch('http://localhost:3000/workflow', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal: 'Find AI productivity tools with pricing', depth: 5 }) // depth > 2 defaults to 2 silently
+      body: JSON.stringify({ goal: 'Search for the startup requests of YC and give me a list of 10 which are fast to build', depth: 5 }) // depth > 2 defaults to 2 silently
     });
 
     if (wfPostRes.status !== 201) {
@@ -355,6 +355,12 @@ async function runTests() {
     if (firecrawlSearchCalls < 1 || completedWf.urls_discovered !== 5 || completedWf.urls_scraped !== 5) {
       throw new Error(`Expected 3 Firecrawl Search seeds and 2 deep pages, got ${completedWf.urls_discovered} discovered and ${completedWf.urls_scraped} scraped`);
     }
+    if (urlsScraped['https://seed1.com#rfs'] || urlsScraped['https://deeplink1.com#overview']) {
+      throw new Error('Fragment URLs were not filtered before deep scraping');
+    }
+    if (completedWf.results.length === 0) {
+      throw new Error('Expected seed-page extraction to produce workflow results');
+    }
     console.log('✅ Workflow Test 3 Passed: Workflow eventually completed successfully');
 
     // Test 4: depth 1 extracts only seed pages and does not follow discovered links
@@ -362,7 +368,7 @@ async function runTests() {
     const depthOneRes = await fetch('http://localhost:3000/workflow', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal: 'Find AI productivity tools with pricing', depth: 1 })
+      body: JSON.stringify({ goal: 'Search for the startup requests of YC and give me a list of 10 which are fast to build', depth: 1 })
     });
     if (depthOneRes.status !== 201) throw new Error(`Expected 201 for depth 1 workflow, got ${depthOneRes.status}`);
     const depthOne = await depthOneRes.json();
