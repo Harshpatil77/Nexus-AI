@@ -10,6 +10,7 @@ async function runTests() {
   console.log('--- Starting Integration Tests for Nexus AI ---');
 
   let firecrawlCalls = 0;
+  let firecrawlSearchCalls = 0;
   let anthropicCalls = 0;
   const urlsScraped = {};
 
@@ -38,6 +39,22 @@ async function runTests() {
     });
   });
 
+  mockApp.post('/search', (req, res) => {
+    firecrawlSearchCalls++;
+    const { query, limit } = req.body;
+    if (query !== 'Find AI productivity tools with pricing' || limit !== 3) {
+      return res.status(400).json({ success: false, error: 'Unexpected search request' });
+    }
+    return res.json({
+      success: true,
+      data: [
+        { url: 'https://seed1.com', markdown: 'Seed one markdown with AI productivity tools and pricing details. '.repeat(3) },
+        { url: 'https://seed2.com', markdown: 'Seed two markdown with AI productivity tools and pricing details. '.repeat(3) },
+        { url: 'https://seed3.com', markdown: 'Seed three markdown with AI productivity tools and pricing details. '.repeat(3) }
+      ]
+    });
+  });
+
   mockApp.post('/nvidia', (req, res) => {
     anthropicCalls++;
     const { messages } = req.body;
@@ -48,7 +65,7 @@ async function runTests() {
       return res.json({
         choices: [{ message: { content: '["https://seed1.com", "https://seed2.com"]' } }]
       });
-    } else if (content.includes('extract all relevant hyperlinks')) {
+    } else if (content.includes('Extract all relevant URLs from this page')) {
       return res.json({
         choices: [{ message: { content: '["https://deeplink1.com", "https://deeplink2.com"]' } }]
       });
@@ -84,6 +101,7 @@ async function runTests() {
     FIRECRAWL_API_KEY: 'test-firecrawl-key',
     NVIDIA_API_KEY: 'test-nvidia-key',
     FIRECRAWL_API_URL: 'http://localhost:4000/firecrawl',
+    FIRECRAWL_SEARCH_API_URL: 'http://localhost:4000/search',
     NVIDIA_API_URL: 'http://localhost:4000/nvidia'
   };
 
@@ -280,7 +298,7 @@ async function runTests() {
     const wfPostRes = await fetch('http://localhost:3000/workflow', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal: 'Find AI tools', depth: 5 }) // depth > 2 defaults to 2 silently
+      body: JSON.stringify({ goal: 'Find AI productivity tools with pricing', depth: 5 }) // depth > 2 defaults to 2 silently
     });
 
     if (wfPostRes.status !== 201) {
@@ -334,6 +352,9 @@ async function runTests() {
     if (completedWf.status !== 'completed') {
       throw new Error(`Expected status 'completed', got ${completedWf.status}`);
     }
+    if (firecrawlSearchCalls < 1 || completedWf.urls_discovered !== 5 || completedWf.urls_scraped !== 5) {
+      throw new Error(`Expected 3 Firecrawl Search seeds and 2 deep pages, got ${completedWf.urls_discovered} discovered and ${completedWf.urls_scraped} scraped`);
+    }
     console.log('✅ Workflow Test 3 Passed: Workflow eventually completed successfully');
 
     // Test 4: depth 1 extracts only seed pages and does not follow discovered links
@@ -341,7 +362,7 @@ async function runTests() {
     const depthOneRes = await fetch('http://localhost:3000/workflow', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal: 'Find AI tools', depth: 1 })
+      body: JSON.stringify({ goal: 'Find AI productivity tools with pricing', depth: 1 })
     });
     if (depthOneRes.status !== 201) throw new Error(`Expected 201 for depth 1 workflow, got ${depthOneRes.status}`);
     const depthOne = await depthOneRes.json();
@@ -356,7 +377,7 @@ async function runTests() {
       }
     }
     if (!completedDepthOne || completedDepthOne.status !== 'completed') throw new Error('Depth 1 workflow did not complete');
-    if (completedDepthOne.urls_discovered !== 2 || completedDepthOne.urls_scraped !== 2) {
+    if (completedDepthOne.urls_discovered !== 3 || completedDepthOne.urls_scraped !== 3) {
       throw new Error(`Depth 1 followed links unexpectedly: discovered ${completedDepthOne.urls_discovered}, scraped ${completedDepthOne.urls_scraped}`);
     }
     await fs.unlink(path.join(process.cwd(), `workflow_${depthOne.workflow_id}.json`));

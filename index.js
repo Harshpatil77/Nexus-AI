@@ -201,69 +201,35 @@ async function smartScrape(url, firecrawlKey) {
 }
 
 // ═══════════════════════════════════
-// URL Discovery helper (for workflow Step 1)
-// Uses a GENERATION prompt, not an extraction prompt
-// ═══════════════════════════════════
-async function discoverUrls(goal, apiKey) {
-  const nvidiaUrl = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
-
-  const prompt = `You are a web research URL generator. Convert the user's high-level research goal into a JSON list of starting seed URLs (maximum 3 URLs) that are best suited to gather the initial information or links.
-
-Goal: "${goal}"
-
-RULES:
-- Return ONLY a valid JSON array of URL strings
-- Maximum 3 URLs
-- URLs must be real, publicly accessible web pages
-- NO markdown, NO backticks, NO explanation
-- Just the raw JSON array
-
-Example output format:
-["https://www.reddit.com/r/example/", "https://news.ycombinator.com/", "https://www.producthunt.com/"]`;
-
-  const response = await fetch(nvidiaUrl, {
+// Workflow discovery uses Firecrawl Search rather than LLM-generated URLs.
+async function discoverSeedUrls(goal, firecrawlKey) {
+  const searchUrl = process.env.FIRECRAWL_SEARCH_API_URL || 'https://api.firecrawl.dev/v1/search';
+  const response = await fetch(searchUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${firecrawlKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'nvidia/nemotron-3-ultra-550b-a55b',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      reasoning_budget: 0,
-      chat_template_kwargs: { enable_thinking: false }
+      query: goal,
+      limit: 3,
+      scrapeOptions: { formats: ['markdown'] }
     })
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`NVIDIA API responded with status ${response.status}: ${errorText}`);
+    throw new Error(`Firecrawl search failed: ${response.status}`);
   }
 
   const json = await response.json();
-  let text = json.choices?.[0]?.message?.content || '';
-
-  // Strip thinking tags if present
-  if (text.includes('<think>')) {
-    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  }
-  if (text.startsWith('</think>')) {
-    text = text.replace(/^<\/think>\s*/, '').trim();
+  if (!json.success || !Array.isArray(json.data)) {
+    throw new Error('Firecrawl search returned no results');
   }
 
-  // Strip markdown code blocks if present
-  if (text.startsWith('```')) {
-    text = text.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/```$/, '').trim();
-  }
-
-  console.log('Discovery LLM raw response:', text);
-
-  const parsed = JSON.parse(text);
-  if (!Array.isArray(parsed)) {
-    throw new Error('Discovery response was not an array');
-  }
-  return parsed.filter(u => typeof u === 'string' && u.startsWith('http')).slice(0, 3);
+  return json.data
+    .filter(item => typeof item?.url === 'string' && item.url.startsWith('http'))
+    .slice(0, 3)
+    .map(item => ({ url: item.url, markdown: item.markdown || '' }));
 }
 
 // Nemotron extraction helper
@@ -746,73 +712,65 @@ app.post('/workflow', async (req, res) => {
 // Asynchronous workflow executor
 async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKey, userHash, sessionId) {
   try {
-    // --- STEP 1: Discovery ---
+    // --- STEP 1: Discovery via Firecrawl Search ---
     workflow.current_step = 1;
     await saveWorkflowState(workflow);
 
-    let seedUrls = [];
+    let seedResults = [];
     try {
-      seedUrls = await discoverUrls(workflow.goal, nemotronKey);
+      seedResults = await discoverSeedUrls(workflow.goal, firecrawlKey);
     } catch (err) {
-      console.error("Step 1 failed during LLM call:", err);
-    }
-
-    if (seedUrls.length === 0) {
       workflow.status = 'failed';
-      workflow.failed.push({ step: 1, reason: "Could not discover URLs for this goal. Try being more specific." });
+      workflow.failed.push({ step: 1, reason: err.message || String(err) });
       workflow.completed_at = Date.now();
       await saveWorkflowState(workflow);
       return;
     }
 
+    if (seedResults.length === 0) {
+      workflow.status = 'failed';
+      workflow.failed.push({ step: 1, reason: 'No URLs found for this goal. Try being more specific.' });
+      workflow.completed_at = Date.now();
+      await saveWorkflowState(workflow);
+      return;
+    }
+
+    const seedUrls = seedResults.map(result => result.url);
     workflow.urls_discovered = seedUrls.length;
     workflow.steps_completed.push(1);
     await saveWorkflowState(workflow);
 
-    // --- STEP 2: Scrape Seed URLs ---
+    // --- STEP 2: Extract links from seed-page Markdown returned by Search ---
     workflow.current_step = 2;
     await saveWorkflowState(workflow);
 
-    const seedScrapeTasks = seedUrls.map((url) => async () => {
-      try {
-        const scrape = await smartScrape(url, firecrawlKey);
-        const { markdown, tierUsed } = scrape;
-        if (depth === 1) {
-          return { url, markdown, tierUsed, success: true, deepLinks: [] };
-        }
-        const extractLinksPrompt = `Read this page markdown and extract all relevant hyperlinks matching or pointing to pages related to: "${workflow.goal}".
-Return ONLY a JSON array of string URLs. Do NOT include markdown blocks, code blocks, or text. Just the raw valid JSON array.`;
-        const deepLinks = await extractSchema(markdown, extractLinksPrompt, nemotronKey, 'json');
-        return { url, markdown, tierUsed, success: true, deepLinks: Array.isArray(deepLinks) ? deepLinks : [] };
-      } catch (err) {
-        return { url, success: false, reason: err.message || String(err) };
-      }
-    });
-
-    const seedScrapeResults = await runWithConcurrencyLimit(seedScrapeTasks, 5);
-    
+    const seedScrapeResults = [];
     let allDeepLinks = [];
-    let successfulSeedCount = 0;
-
-    for (const r of seedScrapeResults) {
-      if (r.success) {
-        successfulSeedCount++;
-        workflow.urls_scraped++;
-        r.deepLinks.forEach(dl => {
-          if (typeof dl === 'string' && dl.startsWith('http') && !allDeepLinks.includes(dl) && !seedUrls.includes(dl)) {
-            allDeepLinks.push(dl);
+    for (const seedResult of seedResults) {
+      try {
+        const markdown = seedResult.markdown;
+        const seedScrapeResult = { url: seedResult.url, markdown, tierUsed: null, success: true, deepLinks: [] };
+        if (markdown && markdown.length > 50 && depth === 2) {
+          const extractLinksPrompt = `Extract all relevant URLs from this page that relate to: "${workflow.goal}". Return ONLY a JSON array of URL strings. No markdown. No explanation. Just the raw JSON array.`;
+          try {
+            const links = await extractSchema(markdown, extractLinksPrompt, nemotronKey, 'json');
+            if (Array.isArray(links)) {
+              links.forEach(link => {
+                if (typeof link === 'string' && link.startsWith('http') && !allDeepLinks.includes(link) && !seedUrls.includes(link)) {
+                  allDeepLinks.push(link);
+                  seedScrapeResult.deepLinks.push(link);
+                }
+              });
+            }
+          } catch (error) {
+            console.log('Link extraction failed:', error.message);
           }
-        });
-      } else {
-        workflow.failed.push({ url: r.url, step: 2, reason: r.reason });
+        }
+        seedScrapeResults.push(seedScrapeResult);
+        workflow.urls_scraped++;
+      } catch (err) {
+        workflow.failed.push({ url: seedResult.url, step: 2, reason: err.message || String(err) });
       }
-    }
-
-    if (successfulSeedCount === 0) {
-      workflow.status = 'failed';
-      workflow.completed_at = Date.now();
-      await saveWorkflowState(workflow);
-      return;
     }
 
     workflow.steps_completed.push(2);
