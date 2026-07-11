@@ -11,49 +11,6 @@ async function trackClientEvent(eventType, metadata = {}) {
   }
 }
 
-// Animate values
-function animateHeroCounter(id, targetVal) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  
-  let isPercentage = false;
-  let numericTarget = targetVal;
-  if (typeof targetVal === 'string' && targetVal.endsWith('%')) {
-    isPercentage = true;
-    numericTarget = parseInt(targetVal) || 0;
-  }
-  
-  let current = 0;
-  const duration = 1200;
-  const step = numericTarget / (duration / 16);
-  
-  function tick() {
-    current += step;
-    if (current >= numericTarget) {
-      el.textContent = isPercentage ? `${Math.round(numericTarget)}%` : Math.round(numericTarget).toLocaleString();
-      return;
-    }
-    el.textContent = isPercentage ? `${Math.round(current)}%` : Math.round(current).toLocaleString();
-    requestAnimationFrame(tick);
-  }
-  tick();
-}
-
-async function loadHeroAnalytics() {
-  try {
-    const res = await fetch('/metrics');
-    const data = await res.json();
-    animateHeroCounter('statUsers', data.users.total_unique || 0);
-    animateHeroCounter('statWorkflows', data.workflows.started || 0);
-    animateHeroCounter('statUrls', data.scrapes.total_urls || 0);
-    animateHeroCounter('statSuccess', `${data.workflows.success_rate || 0}%`);
-  } catch (e) {
-    console.error('Failed to load hero analytics:', e);
-  }
-}
-
-document.addEventListener('DOMContentLoaded', loadHeroAnalytics);
-
 function setPrompt(text) {
   document.getElementById('prompt').value = text;
 }
