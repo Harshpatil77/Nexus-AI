@@ -87,6 +87,20 @@ export function isFirewallError(error) {
     message.includes('akamai');
 }
 
+export async function lastResortFetch(url) {
+  try {
+    const response = await withTimeout(fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    }), 15000, 'Last resort');
+    if (!response.ok) throw new Error(String(response.status));
+    return htmlToMarkdown(await response.text());
+  } catch (error) {
+    throw new Error(`All tiers exhausted — ${error.message}`);
+  }
+}
+
 export async function smartScrape(url, firecrawlKey) {
   if (isHostileDomain(url)) {
     console.log('Hostile domain detected, routing to Tier 3:', url);
@@ -95,6 +109,12 @@ export async function smartScrape(url, firecrawlKey) {
       if (!isBlockedResponse(markdown)) return { markdown, tierUsed: 3 };
     } catch (error) {
       console.log('Tier 3 failed:', error.message);
+    }
+    try {
+      const markdown = await lastResortFetch(url);
+      if (!isBlockedResponse(markdown)) return { markdown, tierUsed: 4 };
+    } catch (error) {
+      console.log('Tier 4 failed:', error.message);
     }
     throw new Error('All tiers exhausted — site may require authentication');
   }
@@ -130,6 +150,15 @@ export async function smartScrape(url, firecrawlKey) {
     }
   } catch (error) {
     console.log('Tier 3 failed:', error.message);
+  }
+  try {
+    const markdown = await lastResortFetch(url);
+    if (!isBlockedResponse(markdown)) {
+      console.log('Tier 4 success:', url);
+      return { markdown, tierUsed: 4 };
+    }
+  } catch (error) {
+    console.log('Tier 4 failed:', error.message);
   }
   throw new Error('All tiers exhausted — site may require authentication');
 }

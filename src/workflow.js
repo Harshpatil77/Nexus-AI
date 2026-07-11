@@ -192,6 +192,25 @@ export async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKe
       });
       workflow.results = Array.from(uniqueMap.values());
     }
+
+    if (workflow.results.length > 1) {
+      try {
+        const combinedContent = workflow.format === 'text'
+          ? workflow.results.map(result => result.text || JSON.stringify(result)).join('\n\n---\n\n')
+          : JSON.stringify(workflow.results, null, 2);
+        const synthesisPrompt = workflow.format === 'text'
+          ? `You have collected research from multiple web pages about this goal: "${workflow.goal}". Here is all the collected data:\n${combinedContent}\n\nNow write ONE clean, unified, well-structured summary that directly answers the goal. Remove duplicates. Be specific and detailed. Use clear headings and numbered lists where helpful.`
+          : `You have collected JSON data from multiple web pages about: "${workflow.goal}". Data: ${combinedContent}\n\nReturn ONE clean JSON array combining all unique results. Remove duplicates. Keep only fields relevant to the goal.`;
+        const synthesized = await extractSchema(combinedContent, synthesisPrompt, nemotronKey, workflow.format);
+        if (synthesized) {
+          workflow.results = workflow.format === 'text'
+            ? [{ url: 'synthesized', text: synthesized, source: 'synthesis', sources_count: workflow.urls_scraped }]
+            : Array.isArray(synthesized) ? synthesized : [synthesized];
+        }
+      } catch (error) {
+        console.log('Synthesis failed, keeping individual results:', error.message);
+      }
+    }
     workflow.steps_completed.push(4);
     workflow.status = 'completed';
     workflow.completed_at = Date.now();

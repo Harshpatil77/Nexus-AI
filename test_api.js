@@ -25,7 +25,7 @@ async function runTests() {
     // Register calls per URL
     urlsScraped[url] = (urlsScraped[url] || 0) + 1;
 
-    if (url === 'https://fail.com') {
+    if (url === 'http://localhost:4000/fail-direct' || url === 'http://localhost:4000/last-resort') {
       console.log(`[Mock Firecrawl] Simulating scrape failure for ${url} (Attempt ${urlsScraped[url]})`);
       return res.status(500).json({ success: false, error: 'Mock scraping error' });
     }
@@ -37,6 +37,14 @@ async function runTests() {
         markdown: `Mock markdown content for ${url}. `.repeat(5)
       }
     });
+  });
+
+  mockApp.get('/fail-direct', (req, res) => {
+    res.status(500).send('Direct fetch failure');
+  });
+
+  mockApp.get('/last-resort', (req, res) => {
+    res.send(`<html><body>${'Tier 4 direct fetch content. '.repeat(8)}</body></html>`);
   });
 
   mockApp.post('/search', (req, res) => {
@@ -215,12 +223,12 @@ async function runTests() {
     console.log('\n--- Verification Step 4: Error Handling & Tier Exhaustion ---');
     
     // Reset call tracking
-    urlsScraped['https://fail.com'] = 0;
+    urlsScraped['http://localhost:4000/fail-direct'] = 0;
     const failScrapeRes = await fetch('http://localhost:3000/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        urls: ['https://fail.com', 'https://success-after-fail.com'],
+        urls: ['http://localhost:4000/fail-direct', 'https://success-after-fail.com'],
         prompt: 'Extract title'
       })
     });
@@ -230,18 +238,18 @@ async function runTests() {
     createdStateFiles.push(failScrapeData.state_id);
 
     // The router tries Firecrawl once, then falls through unavailable fallback tiers.
-    const attempts = urlsScraped['https://fail.com'] || 0;
-    console.log(`Firecrawl scrape attempts for https://fail.com: ${attempts}`);
+    const attempts = urlsScraped['http://localhost:4000/fail-direct'] || 0;
+    console.log(`Firecrawl scrape attempts for direct failure target: ${attempts}`);
 
     if (attempts !== 1) {
-      throw new Error(`Expected exactly 1 Tier 1 attempt for https://fail.com, but got ${attempts}`);
+      throw new Error(`Expected exactly 1 Tier 1 attempt for direct failure target, but got ${attempts}`);
     }
 
     if (
       failScrapeData.total === 2 &&
       failScrapeData.succeeded === 1 &&
       failScrapeData.failed_count === 1 &&
-      failScrapeData.failed[0].url === 'https://fail.com' &&
+      failScrapeData.failed[0].url === 'http://localhost:4000/fail-direct' &&
       failScrapeData.failed[0].reason === 'All tiers exhausted — site may require authentication' &&
       failScrapeData.results[0].url === 'https://success-after-fail.com'
     ) {
@@ -249,6 +257,18 @@ async function runTests() {
     } else {
       throw new Error('Step 4 Failed: Expected failure counts/properties did not match');
     }
+
+    const tierFourRes = await fetch('http://localhost:3000/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: ['http://localhost:4000/last-resort'], prompt: 'Extract title' })
+    });
+    const tierFourData = await tierFourRes.json();
+    createdStateFiles.push(tierFourData.state_id);
+    if (tierFourData.succeeded !== 1 || tierFourData.results[0]?.tier_used !== 4) {
+      throw new Error('Tier 4 direct fetch fallback did not succeed');
+    }
+    console.log('✅ Tier 4 direct fetch fallback passed');
 
     // -------------------------------------------------------------
     // STEP 5: Verify State Tracking (File storage and retrieval endpoint)

@@ -430,7 +430,13 @@ function showWorkflowResults(data) {
     outputEl.style.lineHeight = "1.6";
     var compiledText = '';
     (data.results || []).forEach(function(r) {
-      compiledText += '### URL: ' + r.url + '\n\n' + r.text + '\n\n---\n\n';
+      if (r.url === 'synthesized') {
+        compiledText += '## Research Summary (from ' + (r.sources_count || data.urls_scraped || 0) + ' sources)\n\n' + r.text + '\n\n';
+      } else if (r.source === 'seed') {
+        compiledText += '### Supporting Source: ' + r.url + '\n\n' + r.text + '\n\n---\n\n';
+      } else {
+        compiledText += '### URL: ' + r.url + '\n\n' + r.text + '\n\n---\n\n';
+      }
     });
     outputEl.innerHTML = markdownToHtml(compiledText.trim());
   } else {
