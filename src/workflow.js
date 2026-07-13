@@ -199,8 +199,8 @@ export async function runWorkflowAsync(workflow, depth, firecrawlKey, nemotronKe
           ? workflow.results.map(result => result.text || JSON.stringify(result)).join('\n\n---\n\n')
           : JSON.stringify(workflow.results, null, 2);
         const synthesisPrompt = workflow.format === 'text'
-          ? `You have collected research from multiple web pages about this goal: "${workflow.goal}". Here is all the collected data:\n${combinedContent}\n\nNow write ONE clean, unified, well-structured summary that directly answers the goal. Remove duplicates. Be specific and detailed. Use clear headings and numbered lists where helpful.`
-          : `You have collected JSON data from multiple web pages about: "${workflow.goal}". Data: ${combinedContent}\n\nReturn ONE clean JSON array combining all unique results. Remove duplicates. Keep only fields relevant to the goal.`;
+          ? `You have collected research from multiple web pages about this goal: "${workflow.goal}". Here is all the collected data:\n${combinedContent}\n\nNow write ONE clean, unified, well-structured summary that directly answers the goal. Remove duplicates. Be specific and detailed. Use clear headings and numbered lists where helpful. If specific data like pricing or founding team is not found in the content, instead of saying "not available", write the source URL where this data can be found so the user can check manually.`
+          : `You have collected JSON data from multiple web pages about: "${workflow.goal}". Data: ${combinedContent}\n\nReturn ONE clean JSON array combining all unique results. Remove duplicates. Keep only fields relevant to the goal. If specific data like pricing or founding team is not found in the content, replace any "not available" value with the source URL where the user can check manually.`;
         const synthesized = await extractSchema(combinedContent, synthesisPrompt, nemotronKey, workflow.format);
         if (synthesized) {
           workflow.results = workflow.format === 'text'

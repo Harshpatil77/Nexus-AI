@@ -110,7 +110,9 @@ async function runTests() {
     NVIDIA_API_KEY: 'test-nvidia-key',
     FIRECRAWL_API_URL: 'http://localhost:4000/firecrawl',
     FIRECRAWL_SEARCH_API_URL: 'http://localhost:4000/search',
-    NVIDIA_API_URL: 'http://localhost:4000/nvidia'
+    NVIDIA_API_URL: 'http://localhost:4000/nvidia',
+    ADMIN_USERNAME: 'founder',
+    ADMIN_PASSWORD: 'test-admin-password'
   };
 
   const serverProcess = spawn('node', ['index.js'], { env });
@@ -138,6 +140,19 @@ async function runTests() {
     const healthRes = await fetch('http://localhost:3000/health');
     if (!healthRes.ok) throw new Error('Health check endpoint failed');
     const healthData = await healthRes.json();
+    const homeRes = await fetch('http://localhost:3000/');
+    const homeHtml = await homeRes.text();
+    if (!homeRes.ok || !homeHtml.includes('Scrape Any Website') || homeHtml.includes('statUsers')) {
+      throw new Error('Home page did not render the expected UI without stats cards');
+    }
+    const adminRes = await fetch('http://localhost:3000/admin');
+    const adminStaticRes = await fetch('http://localhost:3000/admin.html');
+    const analyticsUnauthRes = await fetch('http://localhost:3000/analytics');
+    const adminHeader = `Basic ${Buffer.from('founder:test-admin-password').toString('base64')}`;
+    const analyticsAuthRes = await fetch('http://localhost:3000/analytics', { headers: { Authorization: adminHeader } });
+    if (adminRes.status !== 401 || adminStaticRes.status !== 404 || analyticsUnauthRes.status !== 401 || !analyticsAuthRes.ok) {
+      throw new Error('Admin or analytics authentication boundary failed');
+    }
     console.log('Health check response:', healthData);
     if (healthData.status === 'ok' && typeof healthData.timestamp === 'number') {
       console.log('✅ Step 1 Passed: GET /health returned correct status and timestamp');
@@ -173,6 +188,12 @@ async function runTests() {
       body: JSON.stringify({ urls: ['https://example.com'] })
     });
     if (valRes3.status !== 400) throw new Error(`Expected 400, got ${valRes3.status} for missing prompt`);
+
+    const invalidStateRes = await fetch('http://localhost:3000/scrape/not-a-uuid');
+    const invalidWorkflowStateRes = await fetch('http://localhost:3000/workflow/not-a-uuid');
+    if (invalidStateRes.status !== 400 || invalidWorkflowStateRes.status !== 400) {
+      throw new Error('State ID validation did not reject malformed IDs');
+    }
 
     console.log('✅ Step 2 Passed: API correctly rejects invalid inputs with 400 Bad Request');
 
@@ -269,6 +290,19 @@ async function runTests() {
       throw new Error('Tier 4 direct fetch fallback did not succeed');
     }
     console.log('✅ Tier 4 direct fetch fallback passed');
+
+    const streamRes = await fetch('http://localhost:3000/scrape-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: ['https://stream1.com', 'https://stream2.com'], prompt: 'Extract title', compare: true })
+    });
+    const streamBody = await streamRes.text();
+    const doneMatch = streamBody.match(/data: (\{[^\n]*"type":"done"[^\n]*\})/);
+    if (!streamRes.ok || !doneMatch) throw new Error('Streaming scrape did not emit a done event');
+    const streamDone = JSON.parse(doneMatch[1]);
+    createdStateFiles.push(streamDone.state_id);
+    const streamState = await (await fetch(`http://localhost:3000/scrape/${streamDone.state_id}`)).json();
+    if (!streamState.compare || streamState.results.length !== 1) throw new Error('Compare-mode stream did not persist combined output');
 
     // -------------------------------------------------------------
     // STEP 5: Verify State Tracking (File storage and retrieval endpoint)

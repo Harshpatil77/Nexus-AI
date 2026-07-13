@@ -142,7 +142,13 @@ scrapeRouter.post('/scrape-stream', async (req, res) => {
   await trackEvent(output.failed_count === output.total ? 'scrape_failed' : 'scrape_completed', req.userHash, req.sessionId, {
     stateId, format: outFormat, compare: compareMode, url_count: urls.length, succeeded: output.succeeded, failed_count: output.failed_count,
     error: output.failed_count === output.total ? (output.failed[0]?.reason || 'All scrapes failed') : undefined,
-    domains: results.map(result => result.url ? new URL(result.url).hostname : 'unknown')
+    domains: results.map(result => {
+      try {
+        return result.url && result.url.startsWith('http') ? new URL(result.url).hostname : 'unknown';
+      } catch {
+        return 'unknown';
+      }
+    })
   });
   res.write(`data: ${JSON.stringify({ type: 'done', state_id: stateId, succeeded: results.length, failed_count: failed.length })}\n\n`);
   res.end();
